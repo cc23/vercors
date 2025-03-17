@@ -58,7 +58,10 @@ trait SilverBackend
   private def info[T <: col.Node[_]](
       node: silver.Infoed
   )(implicit tag: ClassTag[T]): NodeInfo[T] =
-    node.info.getAllInfos[NodeInfo[T]].headOption.getOrElse(throw NoInfo(node))
+    node.info.getAllInfos[NodeInfo[T]].headOption.getOrElse({
+      logger.error(s"node $node has no info. Type: ${node.getClass}")
+      throw NoInfo(node)
+    })
 
   private def get[T <: col.Node[_]](node: silver.Infoed): T = info(node).node
 

@@ -2372,6 +2372,9 @@ final case class ActionPerm[G](loc: Expr[G], perm: Expr[G])(
     implicit val o: Origin
 ) extends Expr[G] with ActionPermImpl[G]
 
+final case class Low[G](expr: Expr[G])(implicit val o: Origin)
+  extends Expr[G] with LowImpl[G]
+
 sealed trait SmtlibType[G] extends Type[G]
 case class TSmtlibArray[G](index: Seq[Type[G]], value: Type[G])(
     implicit val o: Origin = DiagnosticOrigin

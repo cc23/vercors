@@ -150,6 +150,7 @@ CHOOSE: '\\choose';
 CHOOSE_FRESH: '\\choose_fresh';
 LENGTH: '\\length';
 OLD: '\\old';
+LOW: 'low';
 ASSERT_EXPR: '\\asserting';
 ASSUME_EXPR: '\\assuming';
 TYPEOF: '\\typeof';

@@ -2241,6 +2241,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case PVLEndpointExpr(_, _) => e
       case EndpointExpr(ref, expr) => e
       case ChorExpr(expr) => ChorExpr(bool(expr))
+      case Low(expr) => Low(expr)
+
     }
   }
 

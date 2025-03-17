@@ -303,6 +303,7 @@ valPrimary
  | '(' '\\assuming' langExpr ';' langExpr ')' # valAssuming
  | '(' '\\asserting' langExpr ')' # valBoolAsserting
  | '(' '\\asserting' langExpr ';' langExpr ')' # valAsserting
+ | 'low' '(' langExpr ')' # valLow
  ;
 
 // Out spec: defined meaning: a language local

@@ -59,6 +59,18 @@ object external extends Module {
 }
 
 object viper extends ScalaModule {
+
+   object silverSifGit extends GitModule {
+     // TODO change to commit including node info fix in SIFExtendedTransformer
+      def url = T { "https://github.com/viperproject/silver-sif-extension.git" }
+      def commitish = T { "9442d82e4a152b696d953aa7f179d2b7c2a77ebe" }
+      def filteredRepo = T {
+        val workspace = repo()
+        os.remove.all(workspace / "src" / "test")
+        workspace
+      }
+    }
+
   object silverGit extends GitModule {
     def url = T { "https://github.com/viperproject/silver.git" }
     def commitish = T { "08c001b33decce0b16e698be862d7904c7282a99" }
@@ -89,6 +101,15 @@ object viper extends ScalaModule {
       os.remove(workspace / "src" / "main" / "resources" / "logback.xml")
       workspace
     }
+  }
+
+  object silverSif extends ScalaModule {
+    override def scalaVersion = "2.13.10"
+    override def scalacOptions = T { Seq("-Xno-patmat-analysis", "-nowarn") }
+    def repo = silverSifGit
+    override def sources = T.sources { repo.filteredRepo() / "src" / "main" / "scala" }
+    override def resources = T.sources { repo.filteredRepo() / "src" / "main" / "resources" }
+    override def moduleDeps = Seq(silver)
   }
 
   object silver extends ScalaModule {
@@ -158,7 +179,7 @@ object viper extends ScalaModule {
     override def resources = T.sources { repo.filteredRepo() / "src" / "main" / "resources" }
   }
 
-  override def moduleDeps = Seq(silver, silicon, carbon)
+  override def moduleDeps = Seq(silver, silverSif, silicon, carbon)
 }
 
 object vercors extends Module {

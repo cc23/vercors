@@ -7,12 +7,10 @@ import vct.col.util.AstBuildHelpers.unfoldStar
 import vct.col.{ast => col}
 import vct.result.VerificationError.{SystemError, Unreachable}
 import viper.silver.ast.{TypeVar, WildcardPerm}
-import viper.silver.plugin.standard.termination.{
-  DecreasesClause,
-  DecreasesTuple,
-  DecreasesWildcard,
-}
+import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
+import viper.silver.sif.SIFLowExp
+
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -606,7 +604,6 @@ case class ColToSilver(program: col.Program[_]) {
         silver.Old(exp(expr))(pos = pos(e), info = expInfo(e))
       case col.Old(expr, Some(lbl)) =>
         silver.LabelledOld(exp(expr), ref(lbl))(pos = pos(e), info = expInfo(e))
-
       case col.UMinus(arg) =>
         silver.Minus(exp(arg))(pos = pos(e), info = expInfo(e))
 
@@ -731,6 +728,8 @@ case class ColToSilver(program: col.Program[_]) {
         currentMapGet.having(get) {
           silver.MapLookup(exp(m), exp(k))(pos = pos(e), info = expInfo(e))
         }
+
+      case col.Low(expr) => SIFLowExp(exp(expr))(pos = pos(e), info = expInfo(e))
 
       case other => ??(other)
     }
