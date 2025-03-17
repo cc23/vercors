@@ -61,9 +61,8 @@ object external extends Module {
 object viper extends ScalaModule {
 
    object silverSifGit extends GitModule {
-     // TODO change to commit including node info fix in SIFExtendedTransformer
-      def url = T { "https://github.com/viperproject/silver-sif-extension.git" }
-      def commitish = T { "9442d82e4a152b696d953aa7f179d2b7c2a77ebe" }
+      def url = T { "https://github.com/cc23/silver-sif-extension.git" }
+      def commitish = T { "d70cef25e7099e0083e68d7e651c6e3ff9425dc4" }
       def filteredRepo = T {
         val workspace = repo()
         os.remove.all(workspace / "src" / "test")
