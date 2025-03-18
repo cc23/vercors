@@ -151,6 +151,7 @@ CHOOSE_FRESH: '\\choose_fresh';
 LENGTH: '\\length';
 OLD: '\\old';
 LOW: 'low';
+LOW_EVENT: 'lowEvent';
 ASSERT_EXPR: '\\asserting';
 ASSUME_EXPR: '\\assuming';
 TYPEOF: '\\typeof';

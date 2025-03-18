@@ -304,6 +304,7 @@ valPrimary
  | '(' '\\asserting' langExpr ')' # valBoolAsserting
  | '(' '\\asserting' langExpr ';' langExpr ')' # valAsserting
  | 'low' '(' langExpr ')' # valLow
+ | 'lowEvent' # valLowEvent
  ;
 
 // Out spec: defined meaning: a language local

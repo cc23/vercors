@@ -2549,6 +2549,7 @@ case class JavaToCol[G](
       case ValAsserting(_, _, assn, _, inner, _) =>
         Asserting(convert(assn), convert(inner))(blame(e))
       case ValLow(_,_,expr,_) => Low(convert(expr))
+      case ValLowEvent(_) => LowEvent()
     }
 
   def convert(implicit e: ValExprPairContext): (Expr[G], Expr[G]) =

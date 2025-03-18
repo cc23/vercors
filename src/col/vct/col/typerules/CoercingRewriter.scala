@@ -2242,7 +2242,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case EndpointExpr(ref, expr) => e
       case ChorExpr(expr) => ChorExpr(bool(expr))
       case Low(expr) => Low(expr)
-
+      case LowEvent() => LowEvent()
     }
   }
 
