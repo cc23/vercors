@@ -11,6 +11,8 @@ class SIFExamplesSpec extends VercorsSpec {
 
   //lowEvent
   vercors should verify using anyBackend example "concepts/sif/LowEventExample.java"
+  vercors should verify using anyBackend example "concepts/sif/AssertLowEvent.java"
+  vercors should fail withCode "assertFailed:false" using anyBackend example "concepts/sif/AssertLowEventFailing.java"
   // TODO failing atm:
   // vercors should verify using anyBackend example "concepts/sif/nagini-examples/JoanaFig1Adjusted.java"
 
