@@ -7,6 +7,7 @@ class SIFExamplesSpec extends VercorsSpec {
   vercors should fail withCode "postFailed:false" using anyBackend  example "concepts/sif/SimpleLowExample.java"
   vercors should verify using anyBackend example "concepts/sif/nagini-examples/TestTryCatch.java"
   vercors should fail withCode "postFailed:false" using anyBackend example "concepts/sif/nagini-examples/TestTryCatchFailing.java"
+  vercors should verify using anyBackend example "concepts/sif/nagini-examples/HighReferencesLowValues.java"
 
   //lowEvent
   vercors should verify using anyBackend example "concepts/sif/LowEventExample.java"
