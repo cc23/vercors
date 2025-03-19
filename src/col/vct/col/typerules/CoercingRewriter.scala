@@ -2408,6 +2408,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
         )
       case loop @ PVLLoop(init, cond, update, contract, body) =>
         PVLLoop(init, bool(cond), update, contract, body)(loop.blame)
+      case decl @ Declassify(res) => decl
     }
   }
 

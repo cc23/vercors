@@ -9,7 +9,7 @@ import vct.result.VerificationError.{SystemError, Unreachable}
 import viper.silver.ast.{TypeVar, WildcardPerm}
 import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
-import viper.silver.sif.{SIFLowEventExp, SIFLowExp}
+import viper.silver.sif.{SIFLowEventExp, SIFLowExp, SIFDeclassifyStmt}
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -860,6 +860,7 @@ case class ColToSilver(program: col.Program[_]) {
           pos = pos(wand),
           info = NodeInfo(wand),
         ))(pos = pos(s), info = NodeInfo(s))
+      case col.Declassify(expr) => SIFDeclassifyStmt(exp(expr))(pos(s), NodeInfo(s))
       case other => ??(other)
     }
 

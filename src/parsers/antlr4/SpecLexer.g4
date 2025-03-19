@@ -83,6 +83,7 @@ VAL_KERNEL_INVARIANT: 'kernel_invariant';
 VAL_LOCK_INVARIANT: 'lock_invariant';
 VAL_SIGNALS: 'signals';
 VAL_DECREASES: 'decreases';
+VAL_DECLASSIFY: 'declassify';
 
 VAL_APPLY: 'apply';
 VAL_FOLD: 'fold';

@@ -1953,6 +1953,7 @@ case class JavaToCol[G](
             )(blame(stat))
           },
         )
+      case ValDeclassify(_, _, res, _) => Declassify(convert(res))
     }
 
   def convert(implicit block: ValBlockContext): Seq[Statement[G]] =
@@ -2548,7 +2549,7 @@ case class JavaToCol[G](
         Asserting(convert(assn), tt)(blame(e))
       case ValAsserting(_, _, assn, _, inner, _) =>
         Asserting(convert(assn), convert(inner))(blame(e))
-      case ValLow(_,_,expr,_) => Low(convert(expr))
+      case ValLow(_, _, expr, _) => Low(convert(expr))
       case ValLowEvent(_) => LowEvent()
     }
 

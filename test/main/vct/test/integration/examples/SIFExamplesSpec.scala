@@ -16,4 +16,9 @@ class SIFExamplesSpec extends VercorsSpec {
   // TODO failing atm:
   // vercors should verify using anyBackend example "concepts/sif/nagini-examples/JoanaFig1Adjusted.java"
 
+  //declassify
+  vercors should verify using anyBackend example "concepts/sif/SimpleDeclassifyExample.java"
+  //TODO check if desired behavior
+  vercors should verify using anyBackend example "concepts/sif/DeclassifyAlias.java"
+  vercors should fail withCode "postFailed:false" using anyBackend example "concepts/sif/SimpleDeclassifyExampleFailing.java"
 }

@@ -89,6 +89,7 @@ valStatement
  | 'commit' langExpr ';' # valCommit
  | 'extract' langStatement # valExtract
  | 'frame' valContractClause* langStatement # valFrame
+ | 'declassify' '(' langExpr ')' # valDeclassify
  ;
 
 valActionImpl
