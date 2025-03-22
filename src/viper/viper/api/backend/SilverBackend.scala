@@ -104,11 +104,13 @@ trait SilverBackend
         Using(Files.newBufferedWriter(f))(_.write(silverProgramString))
 
         SilverParserDummyFrontend().parse(RWFile(f, doWatch = false)) match {
+          //TODO include plugins for parsing
           case Left(errors) =>
-            logger.warn(
-              "Possible viper bug: silver AST does not reparse when printing as text"
-            )
-            for (error <- errors) { logger.warn(error.toString) }
+            // False positive warning: doesnt work with plugins
+//            logger.warn(
+//              "Possible viper bug: silver AST does not reparse when printing as text"
+//            )
+//            for (error <- errors) { logger.warn(error.toString) }
           case Right(reparsedProgram) =>
             SilverTreeCompare.compare(silverProgram, reparsedProgram) match {
               case Nil =>
