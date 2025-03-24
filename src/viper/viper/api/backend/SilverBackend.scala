@@ -27,6 +27,8 @@ trait SilverBackend
   case class NotSupported(text: String) extends SystemError
   case class ViperCrashed(text: String) extends SystemError
 
+  private val programAfterPluginsOutputPath = "afterSIFTransformation.vpr"
+
   case class ConsistencyErrors(errors: Seq[ConsistencyError])
       extends SystemError {
     override def text: String =
@@ -144,6 +146,10 @@ trait SilverBackend
           case Some(program) => program
           case None => throw PluginErrors(plugins.errors)
         }
+
+      RWFile(Path.of(programAfterPluginsOutputPath)).write { writer =>
+        writer.write(transformedProgram.toString())
+      }
 
       val backendVerifies =
         plugins.mapVerificationResult(
