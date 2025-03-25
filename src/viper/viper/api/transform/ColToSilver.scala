@@ -9,7 +9,7 @@ import vct.result.VerificationError.{SystemError, Unreachable}
 import viper.silver.ast.{TypeVar, WildcardPerm}
 import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
-import viper.silver.sif.{SIFLowEventExp, SIFLowExp, SIFDeclassifyStmt}
+import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFLowEventExp, SIFLowExp}
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -820,6 +820,9 @@ case class ColToSilver(program: col.Program[_]) {
         )(pos = pos(s), info = NodeInfo(s))
       case col.Label(decl, col.Block(Nil)) =>
         silver.Label(ref(decl), Seq())(pos = pos(s), info = NodeInfo(s))
+      case col.Break(None) => SIFBreakStmt()(pos = pos(s), info = NodeInfo(s))
+      // break statements with labels are not supported (error should have been thrown already)
+      case col.Continue(None) => SIFContinueStmt()(pos = pos(s), info = NodeInfo(s))
       case col.Goto(lbl) =>
         silver.Goto(ref(lbl))(pos = pos(s), info = NodeInfo(s))
       case col.Return(col.Void()) =>

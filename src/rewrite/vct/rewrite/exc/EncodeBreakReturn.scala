@@ -9,10 +9,17 @@ import vct.col.ref.{LazyRef, Ref}
 import vct.col.util.AstBuildHelpers._
 import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
 import vct.col.util.SuccessionMap
+import vct.col.{ast => col}
+import vct.result.VerificationError.SystemError
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
+
+case class BreakWithLabelsNotSupported() extends SystemError {
+  override def text: String =
+   "Break statements are not yet supported. They should be rewritten to Break statements without labels."
+}
 
 case object EncodeBreakReturn extends RewriterBuilder {
   override def key: String = "breakReturn"
@@ -86,14 +93,12 @@ case class EncodeBreakReturn[Pre <: Generation]() extends Rewriter[Pre] {
           }
 
         case Break(None) =>
-          throw ExcludedByPassOrder(
-            "Break statements without a label are made explicit by SpecifyImplicitLabels",
-            Some(stat),
-          )
+          Break(None)
 
         case Break(Some(Ref(label))) =>
-          breakLabels += label
-          Goto(postLabeledStatement.ref(label))
+          throw BreakWithLabelsNotSupported()
+          //          breakLabels += label
+//          Break(Some(postLabeledStatement.ref(label)))
 
         case Return(result) =>
           Block(Seq(

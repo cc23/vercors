@@ -432,12 +432,12 @@ case class SilverTransformation(
         ParBlockEncoder,
 
         // Extract explicitly extracted code sections, which ban continue/break/return/goto outside them.
-        SpecifyImplicitLabels,
+        // not used with SIFBreak/SIFContinue: SpecifyImplicitLabels,
         EncodeExtract,
 
         // Encode exceptional behaviour (no more continue/break/return/try/throw)
         SwitchToGoto,
-        ContinueToBreak,
+        //not used with SIFContinue: ContinueToBreak,
         EncodeBreakReturn,
       ) ++ simplifyBeforeRelations ++ Seq(
         SimplifyQuantifiedRelations,
