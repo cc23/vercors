@@ -438,7 +438,8 @@ case class SilverTransformation(
         // Encode exceptional behaviour (no more continue/break/return/try/throw)
         SwitchToGoto,
         //not used with SIFContinue: ContinueToBreak,
-        EncodeBreakReturn,
+        //not used with SIFReturn: EncodeBreakReturn,
+        //TODO When enabling Java Labels some rewrites from EncodeBreakReturn are needed
       ) ++ simplifyBeforeRelations ++ Seq(
         SimplifyQuantifiedRelations,
         SimplifyNestedQuantifiers,

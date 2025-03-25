@@ -1,6 +1,7 @@
 package viper.api.transform
 
 import hre.util.ScopedStack
+import vct.col.ast.{Local, Void}
 import vct.col.origin.{AccountedDirection, FailLeft, FailRight, Name}
 import vct.col.ref.Ref
 import vct.col.util.AstBuildHelpers.unfoldStar
@@ -9,7 +10,7 @@ import vct.result.VerificationError.{SystemError, Unreachable}
 import viper.silver.ast.{TypeVar, WildcardPerm}
 import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
-import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFLowEventExp, SIFLowExp}
+import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFLowEventExp, SIFLowExp, SIFReturnStmt}
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -369,6 +370,13 @@ case class ColToSilver(program: col.Program[_]) {
     result
   }
 
+  private def local(l: col.Local[_]): silver.LocalVar = {
+    val v = l.ref
+    silver.LocalVar(ref(v), typ(v.decl.t))(pos = pos(l), info = expInfo(l))
+  }
+
+
+
   def exp(e: col.Expr[_]): silver.Exp =
     e match {
       case col.BooleanValue(value) =>
@@ -551,8 +559,7 @@ case class ColToSilver(program: col.Program[_]) {
             )(pos = pos(e), expInfo(e))
           case default => ??(default)
         }
-      case col.Local(v) =>
-        silver.LocalVar(ref(v), typ(v.decl.t))(pos = pos(e), info = expInfo(e))
+      case l @ col.Local(_) => local(l)
       case col.SilverDeref(obj, ref) =>
         silver.FieldAccess(exp(obj), fields(ref.decl))(
           pos = pos(e),
@@ -825,8 +832,10 @@ case class ColToSilver(program: col.Program[_]) {
       case col.Continue(None) => SIFContinueStmt()(pos = pos(s), info = NodeInfo(s))
       case col.Goto(lbl) =>
         silver.Goto(ref(lbl))(pos = pos(s), info = NodeInfo(s))
-      case col.Return(col.Void()) =>
-        silver.Seqn(Nil, Nil)(pos = pos(s), info = NodeInfo(s))
+        // should never happen as ResolveExpressionSideEffects will convert this to Return(Void)
+      case col.Return(result @ Local(_)) =>
+        SIFReturnStmt(Some(exp(result)), Some(local(result)))(pos = pos(s), info = NodeInfo(s))
+      case col.Return(Void()) => SIFReturnStmt(None, None)(pos = pos(s), info = NodeInfo(s))
       case col.Exhale(res) =>
         silver.Exhale(exp(res))(pos = pos(s), info = NodeInfo(s))
       case col.Assert(assn) =>
