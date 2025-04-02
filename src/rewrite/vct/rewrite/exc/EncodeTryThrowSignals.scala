@@ -90,28 +90,57 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
   override def dispatch(stat: Statement[Pre]): Statement[Post] = {
     implicit val o: Origin = stat.o
     stat match {
-      case TryCatchFinally(body, after, catches) =>
-        SIFTryCatchFinally(
-          dispatch(body),
-          dispatch(after),
-          catches.map(cc => {
-            val exceptionVariable = variables.dispatch(cc.decl)
-            SIFCatchClause(
-              exceptionVariable,
-              getExc,
-              (getExc !== Null[Post]()) &&
-                InstanceOf(getExc, TypeValue(dispatch(cc.decl.t))),
-              Block(Seq(
-                assignLocal(
-                  exceptionVariable.get,
-                  Cast(getExc, TypeValue(dispatch(cc.decl.t))),
-                ),
-                dispatch(cc.body),
-              )),
+      case TryCatchFinally(body, after, catches) => {
+        val newBody = needCurrentExceptionRestoration.having(false) { dispatch(body) }
+        val finallyBody = needCurrentExceptionRestoration.having(true) { dispatch(after) }
+        val catchClauses = catches.map(cc => {
+          val exceptionVariable = variables.dispatch(cc.decl)
+          SIFCatchClause(
+            exceptionVariable,
+            getExc,
+            (getExc !== Null[Post]()) &&
+              InstanceOf(getExc, TypeValue(dispatch(cc.decl.t))),
+            Block(Seq(
+              assignLocal(
+                exceptionVariable.get,
+                Cast(getExc, TypeValue(dispatch(cc.decl.t))),
+              ),
+              needCurrentExceptionRestoration.having(true) {
+                dispatch(cc.body)
+              }
+            )),
+          )
+        })
+
+        val (store, restore: Statement[Post],
+        vars: Seq[Variable[Post]],
+          ) =
+          if (needCurrentExceptionRestoration.top) {
+            val tmp = new Variable[Post](TAnyClass())(CurrentlyHandling)
+            (
+              Block[Post](
+                Seq(assignLocal(tmp.get, getExc), assignLocal(getExc, Null()))
+              ),
+              assignLocal[Post](getExc, tmp.get),
+              Seq(tmp),
             )
-          }),
+          } else
+            (Block[Post](Nil), Block[Post](Nil), Nil)
+
+        val sifTryCatchFinally = SIFTryCatchFinally(
+          newBody,
+          Block(Seq(finallyBody, restore)),
+          catchClauses,
         )
 
+        Scope(
+          vars,
+          Block(Seq(
+            store,
+            sifTryCatchFinally
+          )),
+        )
+      }
       case t @ Throw(obj) =>
         Block(Seq(
           assignLocal(getExc, dispatch(obj)),
