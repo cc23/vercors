@@ -157,7 +157,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
             currentException.top.get +: inv.outArgs.map(dispatch)
           ),
           Branch(
-            Seq((getExc !== Null(), Goto(exceptionalHandlerEntry.top.ref)))
+            Seq((getExc !== Null(), Throw(getExc)(stat.o)))
           ),
         ))
 
@@ -170,7 +170,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
             currentException.top.get +: inv.outArgs.map(dispatch)
           ),
           Branch(
-            Seq((getExc !== Null(), Goto(exceptionalHandlerEntry.top.ref)))
+            Seq((getExc !== Null(), Throw(getExc)(stat.o)))
           ),
         ))
 
