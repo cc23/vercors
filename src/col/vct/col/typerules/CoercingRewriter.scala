@@ -376,6 +376,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case node: ApplyAnyPredicate[Pre] => coerce(node)
       case node: FoldTarget[Pre] => coerce(node)
       case node: LLVMFloatType[Pre] => node
+      case node: SIFCatchClause[Pre] => node
     }
 
   def preCoerce(decl: Declaration[Pre]): Declaration[Pre] = decl
@@ -2384,9 +2385,11 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case SpecIgnoreStart() => SpecIgnoreStart()
       case Switch(expr, body) => Switch(expr, body)
       case s @ Synchronized(obj, body) => Synchronized(cls(obj), body)(s.blame)
-      case t @ Throw(obj) => Throw(cls(obj))(t.blame)
+      case t @ Throw(obj) => Throw(obj)(t.blame) // changed for SIF
       case TryCatchFinally(body, after, catches) =>
         TryCatchFinally(body, after, catches)
+      case SIFTryCatchFinally(body, after, catches) =>
+        SIFTryCatchFinally(body, after, catches)
       case u @ Unfold(assn) => Unfold(assn)(u.blame)
       case u @ Unlock(obj) => Unlock(cls(obj))(u.blame)
       case VecBlock(iters, requires, ensures, content) =>
@@ -2722,6 +2725,12 @@ abstract class CoercingRewriter[Pre <: Generation]()
     implicit val o: Origin = node.o
     val CatchClause(decl, body) = node
     CatchClause(decl, body)
+  }
+
+  override def coerce(node: SIFCatchClause[Pre]): SIFCatchClause[Pre] ={
+    implicit val o: Origin = node.o
+    val SIFCatchClause(decl, exceptionVariable, typeCheckExpr, body) = node
+    SIFCatchClause(decl, exceptionVariable ,typeCheckExpr, body)
   }
 
   def coerce(node: IterVariable[Pre]): IterVariable[Pre] = {

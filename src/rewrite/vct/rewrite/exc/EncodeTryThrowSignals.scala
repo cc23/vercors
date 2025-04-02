@@ -3,6 +3,7 @@ package vct.col.rewrite.exc
 import hre.util.ScopedStack
 import vct.col.ast.RewriteHelpers._
 import vct.col.ast._
+import vct.col.ast.Variable
 import vct.col.origin._
 import vct.col.ref.Ref
 import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
@@ -90,80 +91,32 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
     implicit val o: Origin = stat.o
     stat match {
       case TryCatchFinally(body, after, catches) =>
-        val handlersEntry = new LabelDecl[Post]()(CatchLabel)
-        val finallyEntry = new LabelDecl[Post]()(FinallyLabel)
-
-        val newBody =
-          exceptionalHandlerEntry.having(handlersEntry) {
-            needCurrentExceptionRestoration.having(false) { dispatch(body) }
-          }
-
-        val catchImpl = Block[Post](catches.map {
-          case CatchClause(decl, body) =>
-            val typedExc = variables.dispatch(decl)
-            Scope(
-              Seq(typedExc),
-              Branch(Seq((
-                (getExc !== Null[Post]()) &&
-                  InstanceOf(getExc, TypeValue(dispatch(decl.t))),
-                Block(Seq(
-                  assignLocal(
-                    typedExc.get,
-                    Cast(getExc, TypeValue(dispatch(decl.t))),
-                  ),
-                  assignLocal(getExc, Null()),
-                  exceptionalHandlerEntry.having(finallyEntry) {
-                    needCurrentExceptionRestoration.having(true) {
-                      dispatch(body)
-                    }
-                  },
-                )),
-              ))),
+        SIFTryCatchFinally(
+          dispatch(body),
+          dispatch(after),
+          catches.map(cc => {
+            val exceptionVariable = variables.dispatch(cc.decl)
+            SIFCatchClause(
+              exceptionVariable,
+              getExc,
+              (getExc !== Null[Post]()) &&
+                InstanceOf(getExc, TypeValue(dispatch(cc.decl.t))),
+              Block(Seq(
+                assignLocal(
+                  exceptionVariable.get,
+                  Cast(getExc, TypeValue(dispatch(cc.decl.t))),
+                ),
+                dispatch(cc.body),
+              )),
             )
-        })
-
-        val finallyImpl = Block[Post](Seq(
-          Label(finallyEntry, Block(Nil)),
-          needCurrentExceptionRestoration.having(true) { dispatch(after) },
-          Branch(
-            Seq((getExc !== Null(), Goto(exceptionalHandlerEntry.top.ref)))
-          ),
-        ))
-
-        val (
-          store: Statement[Post],
-          restore: Statement[Post],
-          vars: Seq[Variable[Post]],
-        ) =
-          if (needCurrentExceptionRestoration.top) {
-            val tmp = new Variable[Post](TAnyClass())(CurrentlyHandling)
-            (
-              Block[Post](
-                Seq(assignLocal(tmp.get, getExc), assignLocal(getExc, Null()))
-              ),
-              assignLocal[Post](getExc, tmp.get),
-              Seq(tmp),
-            )
-          } else
-            (Block[Post](Nil), Block[Post](Nil), Nil)
-
-        Scope(
-          vars,
-          Block(Seq(
-            store,
-            newBody,
-            Label(handlersEntry, Block(Nil)),
-            catchImpl,
-            finallyImpl,
-            restore,
-          )),
+          }),
         )
 
       case t @ Throw(obj) =>
         Block(Seq(
           assignLocal(getExc, dispatch(obj)),
           Assert(getExc !== Null())(ThrowNullAssertFailed(t)),
-          Goto(exceptionalHandlerEntry.top.ref),
+          t.rewriteDefault(),
         ))
 
       case inv: InvokeProcedure[Pre] if inv.ref.decl.contract.signals.isEmpty =>

@@ -319,7 +319,15 @@ final case class IterationContract[G](
 final case class CatchClause[G](decl: Variable[G], body: Statement[G])(
     implicit val o: Origin
 ) extends NodeFamily[G] with CatchClauseImpl[G]
-
+@family @scopes[Variable]
+@scopes[LocalHeapVariable]
+final case class SIFCatchClause[G](
+    decl: Variable[G],
+    exceptionVariable: Expr[G],
+    typeCheckExpr: Expr[G],
+    body: Statement[G],
+)(implicit val o: Origin)
+    extends NodeFamily[G] with SIFCatchClauseImpl[G]
 @family
 final case class IterVariable[G](
     variable: Variable[G],
@@ -629,6 +637,14 @@ final case class TryCatchFinally[G](
     extends CompositeStatement[G]
     with ControlContainerStatement[G]
     with TryCatchFinallyImpl[G]
+final case class SIFTryCatchFinally[G](
+    body: Statement[G],
+    after: Statement[G],
+    catches: Seq[SIFCatchClause[G]],
+)(implicit val o: Origin)
+    extends CompositeStatement[G]
+    with ControlContainerStatement[G]
+    with SIFTryCatchFinallyImpl[G]
 final case class Synchronized[G](obj: Expr[G], body: Statement[G])(
     val blame: Blame[LockRegionFailure]
 )(implicit val o: Origin)

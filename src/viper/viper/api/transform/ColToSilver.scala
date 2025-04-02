@@ -1,16 +1,16 @@
 package viper.api.transform
 
 import hre.util.ScopedStack
-import vct.col.ast.{Local, Void}
+import vct.col.ast.{Block, Local, SIFCatchClause, Void}
 import vct.col.origin.{AccountedDirection, FailLeft, FailRight, Name}
 import vct.col.ref.Ref
 import vct.col.util.AstBuildHelpers.unfoldStar
 import vct.col.{ast => col}
 import vct.result.VerificationError.{SystemError, Unreachable}
-import viper.silver.ast.{TypeVar, WildcardPerm}
+import viper.silver.ast.{Info, TypeVar}
 import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
-import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFLowEventExp, SIFLowExp, SIFReturnStmt}
+import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFExceptionHandler, SIFLowEventExp, SIFLowExp, SIFRaiseStmt, SIFReturnStmt, SIFTryCatchStmt}
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -375,7 +375,33 @@ case class ColToSilver(program: col.Program[_]) {
     silver.LocalVar(ref(v), typ(v.decl.t))(pos = pos(l), info = expInfo(l))
   }
 
+  private def localAssign(
+      l: col.SilverLocalAssign[_]
+  ): silver.LocalVarAssign = {
+    val col.SilverLocalAssign(v, value) = l
+    silver.LocalVarAssign(
+      silver.LocalVar(ref(v), typ(v.decl.t))(pos = pos(l), info = NodeInfo(l)),
+      exp(value),
+    )(pos = pos(l), info = NodeInfo(l))
+  }
 
+  private def catchClauseToSIFExceptionHandler[G](
+      pos: silver.Position,
+      info: Info,
+  )(catchClause: SIFCatchClause[G]): SIFExceptionHandler = {
+  val vari = variable(catchClause.decl)
+  SIFExceptionHandler(
+      catchClause.exceptionVariable match {
+        case l @ Local(_) => local(l)
+        case _ => ??(catchClause.exceptionVariable)
+      },
+      exp(catchClause.typeCheckExpr),
+      silver.Seqn(block(catchClause.body).ss, Seq(vari))(
+        pos,
+        info,
+      ),
+    )(pos, info)
+  }
 
   def exp(e: col.Expr[_]): silver.Exp =
     e match {
@@ -785,12 +811,7 @@ case class ColToSilver(program: col.Program[_]) {
           ),
           exp(value),
         )(pos = pos(s), info = NodeInfo(s))
-      case col.SilverLocalAssign(v, value) =>
-        silver.LocalVarAssign(
-          silver
-            .LocalVar(ref(v), typ(v.decl.t))(pos = pos(s), info = NodeInfo(s)),
-          exp(value),
-        )(pos = pos(s), info = NodeInfo(s))
+      case l @ col.SilverLocalAssign(_, _) => localAssign(l)
       case col.Block(statements) =>
         silver
           .Seqn(statements.map(stat), Seq())(pos = pos(s), info = NodeInfo(s))
@@ -873,6 +894,20 @@ case class ColToSilver(program: col.Program[_]) {
           info = NodeInfo(wand),
         ))(pos = pos(s), info = NodeInfo(s))
       case col.Declassify(expr) => SIFDeclassifyStmt(exp(expr))(pos(s), NodeInfo(s))
+      case col.TryCatchFinally(_, _, _) => ??(s)
+      case col.SIFTryCatchFinally(body, after, catches) =>
+        SIFTryCatchStmt(
+          block(body),
+          catches.map(catchClauseToSIFExceptionHandler(pos(s), NodeInfo(s))(_)),
+          None,
+          after match {
+            case Block(Nil) => None
+            case _ => Some(block(after))
+          },
+        )(pos(s), NodeInfo(s))
+      case col.Throw(obj @ col.Local(ref)) =>
+        SIFRaiseStmt(Some(localAssign(col.SilverLocalAssign(ref, obj)(obj.o)))
+        )(pos(s), NodeInfo(s))
       case other => ??(other)
     }
 

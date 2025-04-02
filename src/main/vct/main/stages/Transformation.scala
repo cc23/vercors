@@ -459,7 +459,7 @@ case class SilverTransformation(
         // Resolve side effects including method invocations, for encodetrythrowsignals.
         ResolveExpressionSideChecks,
         ResolveExpressionSideEffects,
-        EncodeTryThrowSignals,
+        EncodeTryThrowSignals, //changed for SIFTryCatch:
         ResolveScale,
         MonomorphizeClass,
         // No more classes

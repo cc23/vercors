@@ -29,6 +29,12 @@ class SIFExamplesSpec extends VercorsSpec {
   vercors should verify using anyBackend example "concepts/sif/ReturnExample.java"
   vercors should verify using anyBackend example "concepts/sif/ReturnLoopExample.java"
 
+  //try catch
+  vercors should verify using anyBackend example "concepts/sif/SimpleTryCatch.java"
+  vercors should verify using anyBackend example "concepts/sif/TryCatchFinallyBreak.java"
+  vercors should fail withCode "assertFailed:false" using anyBackend example "concepts/sif/FinallyBreak.java"
+
+
   //TODO check how to do the encoding for labeled breaks
   vercors should fail withCode "notMaintained:false"  using anyBackend example "concepts/sif/BreakLblEncodedExample.java"
   vercors should verify using anyBackend example "concepts/sif/BreakLblEncodedExampleFixed.java"
