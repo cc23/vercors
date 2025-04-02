@@ -91,8 +91,10 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
     implicit val o: Origin = stat.o
     stat match {
       case TryCatchFinally(body, after, catches) => {
-        val newBody = needCurrentExceptionRestoration.having(false) { dispatch(body) }
-        val finallyBody = needCurrentExceptionRestoration.having(true) { dispatch(after) }
+        val newBody =
+          needCurrentExceptionRestoration.having(false) { dispatch(body) }
+        val finallyBody =
+          needCurrentExceptionRestoration.having(true) { dispatch(after) }
         val catchClauses = catches.map(cc => {
           val exceptionVariable = variables.dispatch(cc.decl)
           SIFCatchClause(
@@ -105,16 +107,12 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
                 exceptionVariable.get,
                 Cast(getExc, TypeValue(dispatch(cc.decl.t))),
               ),
-              needCurrentExceptionRestoration.having(true) {
-                dispatch(cc.body)
-              }
+              needCurrentExceptionRestoration.having(true) { dispatch(cc.body) },
             )),
           )
         })
 
-        val (store, restore: Statement[Post],
-        vars: Seq[Variable[Post]],
-          ) =
+        val (store, restore: Statement[Post], vars: Seq[Variable[Post]]) =
           if (needCurrentExceptionRestoration.top) {
             val tmp = new Variable[Post](TAnyClass())(CurrentlyHandling)
             (
@@ -133,13 +131,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
           catchClauses,
         )
 
-        Scope(
-          vars,
-          Block(Seq(
-            store,
-            sifTryCatchFinally
-          )),
-        )
+        Scope(vars, Block(Seq(store, sifTryCatchFinally)))
       }
       case t @ Throw(obj) =>
         Block(Seq(
@@ -156,9 +148,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
           inv.rewrite(outArgs =
             currentException.top.get +: inv.outArgs.map(dispatch)
           ),
-          Branch(
-            Seq((getExc !== Null(), Throw(getExc)(stat.o)))
-          ),
+          Branch(Seq((getExc !== Null(), Throw(getExc)(stat.o)))),
         ))
 
       case inv: InvokeMethod[Pre] if inv.ref.decl.contract.signals.isEmpty =>
@@ -169,9 +159,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
           inv.rewrite(outArgs =
             currentException.top.get +: inv.outArgs.map(dispatch)
           ),
-          Branch(
-            Seq((getExc !== Null(), Throw(getExc)(stat.o)))
-          ),
+          Branch(Seq((getExc !== Null(), Throw(getExc)(stat.o)))),
         ))
 
       case loop: Loop[Pre] =>
@@ -248,21 +236,20 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
 
         currentException.having(exc) {
           lazy val body = method.body.map(body => {
-            val bubble = new LabelDecl[Post]()(ReturnPoint)
-
             Scope(
               Seq(exc),
-              Block(Seq(
-                assignLocal(exc.get, Null()),
-                exceptionalHandlerEntry.having(bubble) {
-                  currentException.having(exc) { dispatch(body) }
-                },
-                Label(bubble, Block(Nil)),
-                Assert(exc.get === Null())(AssertFailedSignalsNotClosed(method)),
-              )),
+              SIFTryCatchFinally(
+                Block(Seq(
+                  assignLocal(exc.get, Null()),
+                  currentException.having(exc) { dispatch(body) },
+                )),
+                Assert(exc.get === Null())(AssertFailedSignalsNotClosed(
+                  method
+                )),
+                Nil,
+              ),
             )
           })
-
           allScopes.anyDeclare(
             allScopes.anySucceedOnly(method, method.rewrite(body = body))
           )
