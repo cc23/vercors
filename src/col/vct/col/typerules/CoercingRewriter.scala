@@ -2385,7 +2385,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case SpecIgnoreStart() => SpecIgnoreStart()
       case Switch(expr, body) => Switch(expr, body)
       case s @ Synchronized(obj, body) => Synchronized(cls(obj), body)(s.blame)
-      case t @ Throw(obj) => Throw(obj)(t.blame) // changed for SIF
+      case t @ Throw(obj) if obj.t.isInstanceOf[TRef[Pre]] => Throw(obj)(t.blame)
+      case t @ Throw(obj) => Throw(cls(obj))(t.blame) // changed for SIF
       case TryCatchFinally(body, after, catches) =>
         TryCatchFinally(body, after, catches)
       case SIFTryCatchFinally(body, after, catches) =>
