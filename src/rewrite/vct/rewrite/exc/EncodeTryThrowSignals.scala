@@ -1,15 +1,12 @@
 package vct.col.rewrite.exc
 
 import hre.util.ScopedStack
-import vct.col.ast.RewriteHelpers._
 import vct.col.ast._
-import vct.col.ast.Variable
 import vct.col.origin._
 import vct.col.ref.Ref
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
+import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.util.AstBuildHelpers
 import vct.col.util.AstBuildHelpers._
-import vct.result.VerificationError.Unreachable
 
 import scala.collection.mutable
 
@@ -37,15 +34,6 @@ case object EncodeTryThrowSignals extends RewriterBuilder {
       PreferredName(Seq("currently_handling_exc")),
       LabelContext("handling exception"),
     ))
-
-  private def ReturnPoint: Origin =
-    Origin(Seq(PreferredName(Seq("bubble")), LabelContext("bubble label")))
-
-  private def CatchLabel: Origin =
-    Origin(Seq(PreferredName(Seq("catches")), LabelContext("catch label")))
-
-  private def FinallyLabel: Origin =
-    Origin(Seq(PreferredName(Seq("finally")), LabelContext("finally label")))
 
   private def ExcBeforeLoop: Origin =
     Origin(
@@ -77,13 +65,11 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
 
   val currentException: ScopedStack[Variable[Post]] = ScopedStack()
   val exceptionalHandlerEntry: ScopedStack[LabelDecl[Post]] = ScopedStack()
-  val returnHandler: ScopedStack[LabelDecl[Post]] = ScopedStack()
 
   val needCurrentExceptionRestoration: ScopedStack[Boolean] = ScopedStack()
   needCurrentExceptionRestoration.push(false)
 
   val signalsBinding: ScopedStack[(Variable[Pre], Expr[Post])] = ScopedStack()
-  val catchBindings: mutable.Set[Variable[Pre]] = mutable.Set()
 
   def getExc(implicit o: Origin): Local[Post] = currentException.top.get
 
@@ -107,6 +93,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
                 exceptionVariable.get,
                 Cast(getExc, TypeValue(dispatch(cc.decl.t))),
               ),
+              assignLocal(getExc, Null()),
               needCurrentExceptionRestoration.having(true) { dispatch(cc.body) },
             )),
           )
@@ -241,7 +228,11 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
               SIFTryCatchFinally(
                 Block(Seq(
                   assignLocal(exc.get, Null()),
-                  currentException.having(exc) { dispatch(body) },
+                  currentException.having(exc) {
+                    needCurrentExceptionRestoration.having(false) {
+                      dispatch(body)
+                    }
+                  },
                 )),
                 Assert(exc.get === Null())(AssertFailedSignalsNotClosed(
                   method
@@ -262,14 +253,9 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
 
         currentException.having(exc) {
           lazy val body = method.body.map(body => {
-            val bubble = new LabelDecl[Post]()(ReturnPoint)
-
             Block(Seq(
               assignLocal(exc.get, Null()),
-              exceptionalHandlerEntry.having(bubble) {
-                currentException.having(exc) { dispatch(body) }
-              },
-              Label(bubble, Block(Nil)),
+              currentException.having(exc) { dispatch(body) },
             ))
           })
 
