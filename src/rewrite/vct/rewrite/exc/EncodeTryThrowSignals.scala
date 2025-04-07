@@ -137,7 +137,7 @@ case class EncodeTryThrowSignals[Pre <: Generation]() extends Rewriter[Pre] {
         Block(Seq(
           assignLocal(getExc, dispatch(obj)),
           Assert(getExc !== Null())(ThrowNullAssertFailed(t)),
-          t.rewriteDefault(),
+          Throw(getExc)(t.blame),
         ))
 
       case inv: InvokeProcedure[Pre] if inv.ref.decl.contract.signals.isEmpty =>
