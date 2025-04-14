@@ -1,13 +1,15 @@
-public class JoanaFig1Adjusted {
+//should fail
+
+public class JoanaFig1 {
 
     /*@
         requires lowEvent;
     @*/
-    public void print(int val){
+    public void print(int val) {
 
     }
 
-    public int inputPIN(){
+    public int inputPIN() {
         return 17;
     }
 
@@ -16,11 +18,10 @@ public class JoanaFig1Adjusted {
     @*/
     public void main() {
         int x = inputPIN();
-        if(x < 1234){
-            print(0);
-        } else {
-            int y = x;
+        if (x < 1234) {
             print(0);
         }
+        int y = x;
+        print(y);
     }
 }
