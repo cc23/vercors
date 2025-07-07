@@ -153,6 +153,8 @@ LENGTH: '\\length';
 OLD: '\\old';
 LOW: 'low';
 LOW_EVENT: 'lowEvent';
+HIDDEN_SPEC:'hidden';
+LEAKABLE:'leakable';
 ASSERT_EXPR: '\\asserting';
 ASSUME_EXPR: '\\assuming';
 TYPEOF: '\\typeof';

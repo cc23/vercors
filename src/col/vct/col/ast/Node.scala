@@ -2397,6 +2397,11 @@ final case class Low[G](expr: Expr[G])(implicit val o: Origin)
 final case class LowEvent[G]()(implicit val o: Origin)
 extends Expr[G] with LowEventImpl[G]
 
+final case class Hidden[G](expr: Expr[G], perm: Expr[G])(implicit val o: Origin)
+  extends Expr[G] with HiddenImpl[G]
+final case class Leakable[G](expr: Expr[G])(implicit val o: Origin)
+  extends Expr[G] with LeakableImpl[G]
+
 sealed trait SmtlibType[G] extends Type[G]
 case class TSmtlibArray[G](index: Seq[Type[G]], value: Type[G])(
     implicit val o: Origin = DiagnosticOrigin
@@ -3416,6 +3421,8 @@ final class JavaClass[G](
     val name: String,
     val modifiers: Seq[JavaModifier[G]],
     val typeParams: Seq[Variable[G]],
+    //TODO here add UC invariant
+    //TODO boolean unverified
     val intrinsicLockInvariant: Expr[G],
     val ext: Type[G],
     val imp: Seq[Type[G]],

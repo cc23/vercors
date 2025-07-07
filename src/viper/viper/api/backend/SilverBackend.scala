@@ -229,7 +229,7 @@ trait SilverBackend
               case reasons.InsufficientPermission(permNode) =>
                 get[col.Node[_]](permNode) match {
                   case _: col.Perm[_] | _: col.PredicateApply[_] |
-                      _: col.Value[_] =>
+                      _: col.Value[_] | _ : col.Hidden[_] | _ : col.Leakable[_] =>
                     assert.blame
                       .blame(blame.AssertFailed(getFailure(reason), assert))
                   case _ => defer(reason)

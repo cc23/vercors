@@ -306,6 +306,8 @@ valPrimary
  | '(' '\\asserting' langExpr ';' langExpr ')' # valAsserting
  | 'low' '(' langExpr ')' # valLow
  | 'lowEvent' # valLowEvent
+ | 'hidden' '(' langExpr ',' langExpr ')' #valHidden
+ | 'leakable' '(' langExpr ')' # valLeakable
  ;
 
 // Out spec: defined meaning: a language local
@@ -423,7 +425,7 @@ valImpureDef
  ;
 
 valModifier
- : ('pure' | 'inline' | 'thread_local' | 'bip_annotation')
+ : ('pure' | 'inline' | 'thread_local' | 'bip_annotation') //TODO unverified?
  | langStatic # valStatic
  ;
 

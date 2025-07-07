@@ -7,7 +7,8 @@ import vct.col.ref.Ref
 import vct.col.util.AstBuildHelpers.unfoldStar
 import vct.col.{ast => col}
 import vct.result.VerificationError.{SystemError, Unreachable}
-import viper.silver.ast.{Info, TypeVar}
+import viper.api.transform.ColToSilver.{hiddenPred, leakablePred}
+import viper.silver.ast.{Info, LocalVarDecl, Predicate, TypeVar}
 import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
 import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFExceptionHandler, SIFLowEventExp, SIFLowExp, SIFRaiseStmt, SIFReturnStmt, SIFTryCatchStmt}
@@ -17,6 +18,8 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object ColToSilver {
+  val hiddenPred = "hidden"
+  val leakablePred = "leakable"
   def transform(
       program: col.Program[_]
   ): (silver.Program, Map[Int, col.Node[_]]) = {
@@ -177,7 +180,12 @@ case class ColToSilver(program: col.Program[_]) {
       domains.toSeq,
       fields.values.toSeq,
       functions.toSeq,
-      predicates.toSeq,
+      predicates.toSeq ++ Seq(
+        Predicate(hiddenPred, Seq(LocalVarDecl("this", silver.Ref)(pos = pos(program), info = NodeInfo(program))), None)
+          (pos = pos(program), info = NodeInfo(program)),
+        Predicate(leakablePred, Seq(LocalVarDecl("this", silver.Ref)(pos = pos(program), info = NodeInfo(program))), None)
+        (pos = pos(program), info = NodeInfo(program))
+      ),
       methods.toSeq,
       extensions = Seq(),
     )()
@@ -763,6 +771,14 @@ case class ColToSilver(program: col.Program[_]) {
 
       case col.Low(expr) => SIFLowExp(exp(expr))(pos = pos(e), info = expInfo(e))
       case col.LowEvent() => SIFLowEventExp()(pos = pos(e), info = expInfo(e))
+      case col.Hidden(expr, perm) => silver.PredicateAccessPredicate(
+          silver.PredicateAccess(Seq(exp(expr)), hiddenPred)(pos = pos(e), info = expInfo(e)),
+          Some(exp(perm))
+        )(pos = pos(e), info = expInfo(e))
+      case col.Leakable(expr) => silver.PredicateAccessPredicate(
+          silver.PredicateAccess(Seq(exp(expr)), leakablePred)(pos = pos(e), info = expInfo(e)),
+          Some(silver.WildcardPerm()(pos = pos(e), info = expInfo(e)))
+        )(pos = pos(e), info = expInfo(e))
       case other => ??(other)
     }
 
