@@ -1299,7 +1299,7 @@ public class MainTransformer<T> {
 
         // Assemble class
         ByReferenceClass<T> main_class = new ByReferenceClass<>(Seqs.empty(), List.from(CollectionConverters.asScala(declarations)),
-                Seqs.empty(), lock_invariant, OriGen.create("Main"));
+                Seqs.empty(), lock_invariant, false, OriGen.create("Main"));
 
         // Register Main class in COL system context
         col_system.add_global_declaration(main_class);

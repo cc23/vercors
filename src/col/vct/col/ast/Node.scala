@@ -729,6 +729,7 @@ final class ByReferenceClass[G](
     val decls: Seq[ClassDeclaration[G]],
     val supports: Seq[Type[G]],
     val intrinsicLockInvariant: Expr[G],
+    val isUnverified: Boolean = false,
 )(implicit val o: Origin)
     extends Class[G] with ByReferenceClassImpl[G]
 final class ByValueClass[G](
@@ -1010,6 +1011,8 @@ case class SplitAccountedPredicate[G](
 sealed trait FieldFlag[G] extends NodeFamily[G] with FieldFlagImpl[G]
 final case class Final[G]()(implicit val o: Origin)
     extends FieldFlag[G] with FinalImpl[G]
+final case class Modifiable[G]()(implicit val o: Origin)
+extends FieldFlag[G] with ModifiableImpl[G]
 
 @family
 sealed trait Coercion[G] extends NodeFamily[G] with CoercionImpl[G]
@@ -3391,6 +3394,10 @@ final case class JavaInline[G]()(implicit val o: Origin)
     extends JavaModifier[G] with JavaInlineImpl[G]
 final case class JavaBipAnnotation[G]()(implicit val o: Origin)
     extends JavaModifier[G] with JavaBipAnnotationImpl[G]
+final case class JavaModifiableField[G]()(implicit val o: Origin)
+  extends JavaModifier[G] with JavaModifiableFieldImpl[G]
+final case class JavaUnverifiedClass[G]()(implicit val o: Origin)
+  extends JavaModifier[G] with JavaUnverifiedClassImpl[G]
 
 @family
 final case class JavaVariableDeclaration[G](
@@ -3422,7 +3429,6 @@ final class JavaClass[G](
     val modifiers: Seq[JavaModifier[G]],
     val typeParams: Seq[Variable[G]],
     //TODO here add UC invariant
-    //TODO boolean unverified
     val intrinsicLockInvariant: Expr[G],
     val ext: Type[G],
     val imp: Seq[Type[G]],

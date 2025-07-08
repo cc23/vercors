@@ -19,4 +19,12 @@ trait ByReferenceClassImpl[G] extends ByReferenceClassOps[G] {
           Nest(intrinsicLockInvariant.show <> ";" <+/> Empty)
       })
     }
+
+  override def layoutUnverified(implicit ctx: Ctx): Doc =
+    Text(
+      if (isUnverified)
+        "UNVERIFIED"
+      else
+        ""
+    )
 }

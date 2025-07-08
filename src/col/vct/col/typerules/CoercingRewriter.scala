@@ -2436,6 +2436,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
           clazz.decls,
           clazz.supports,
           res(clazz.intrinsicLockInvariant),
+          clazz.isUnverified
         )
       case clazz: ByValueClass[Pre] => clazz
       case enum: Enum[Pre] => enum
@@ -2793,7 +2794,10 @@ abstract class CoercingRewriter[Pre <: Generation]()
 
   def coerce(node: FieldFlag[Pre]): FieldFlag[Pre] = {
     implicit val o: Origin = node.o
-    node match { case value: Final[_] => value }
+    node match {
+      case value: Final[_] => value
+      case value: Modifiable[_] => value
+    }
   }
 
   def coerce(node: Location[Pre]): Location[Pre] = {
@@ -3006,6 +3010,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case JavaPure() => JavaPure()
       case JavaInline() => JavaInline()
       case JavaBipAnnotation() => JavaBipAnnotation()
+      case JavaModifiableField() => JavaModifiableField()
+      case JavaUnverifiedClass() => JavaUnverifiedClass()
     }
   }
 

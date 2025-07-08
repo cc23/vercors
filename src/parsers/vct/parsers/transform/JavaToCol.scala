@@ -236,6 +236,10 @@ case class JavaToCol[G](
               JavaInline[G]()
             else if (m.consume(m.bipAnnotation))
               JavaBipAnnotation[G]()
+            else if (m.consume(m.modifiable))
+              JavaModifiableField[G]()
+            else if (m.consume(m.unverifiedClass))
+              JavaUnverifiedClass[G]()
             else
               fail(
                 m.nodes.head,
@@ -1657,6 +1661,8 @@ case class JavaToCol[G](
           case "inline" => collector.inline += mod
           case "thread_local" => collector.threadLocal += mod
           case "bip_annotation" => collector.bipAnnotation += mod
+          case "modifiable" => collector.modifiable += mod
+          case "unverified_class" => collector.unverifiedClass += mod
         }
       case ValStatic(_) => collector.static += mod
     }

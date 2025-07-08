@@ -54,9 +54,12 @@ trait ClassImpl[G] extends Declarator[G] {
       "ReentrantLock(true);" <+/> "Condition" <+> "condition$" <+> "=" <+>
       "intrinsicLock$" <> "." <> "newCondition()" <> ";"
 
+  def layoutUnverified(implicit ctx: Ctx): Doc =
+    Text("")
+
   def layoutJava(implicit ctx: Ctx): Doc =
     layoutLockInvariant <+/> Group(
-      Text("class") <+> ctx.name(this) <>
+      layoutUnverified <+> Text("class") <+> ctx.name(this) <>
         (if (typeArgs.nonEmpty)
            Text("<") <> Doc.args(typeArgs) <> ">"
          else
@@ -72,7 +75,7 @@ trait ClassImpl[G] extends Declarator[G] {
 
   def layoutPvl(implicit ctx: Ctx): Doc =
     layoutLockInvariant <+/> Group(
-      Text("class") <+> ctx.name(this) <>
+      layoutUnverified <+> Text("class") <+> ctx.name(this) <>
         (if (typeArgs.nonEmpty)
            Text("<") <> Doc.args(typeArgs) <> ">"
          else

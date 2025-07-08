@@ -167,6 +167,7 @@ case class PVLToCol[G](
               intrinsicLockInvariant = AstBuildHelpers
                 .foldStar(contract.consume(contract.lock_invariant)),
               typeArgs = typeArgs.map(convert(_)).getOrElse(Nil),
+              isUnverified = false
             )(origin(cls).sourceName(convert(name)))
           },
         )

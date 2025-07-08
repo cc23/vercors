@@ -149,8 +149,9 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             new InstanceField(
               t = FuncTools
                 .repeat(TArray[Post](_), dims, rw.dispatch(fields.t)),
-              flags = fields.modifiers.collect { case JavaFinal() =>
-                new Final[Post]()
+              flags = fields.modifiers.collect {
+                case JavaFinal() => new Final[Post]()
+                case JavaModifiableField() => new Modifiable[Post]()
               },
             )(JavaFieldOrigin(fields, idx))
           rw.classDeclarations.declare(javaFieldsSuccessor((fields, idx)))
@@ -427,6 +428,10 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           case _: JavaAnnotationInterface[Pre] => tt[Pre]
         }
 
+      val isUnverified = cls.modifiers.exists {
+        case JavaUnverifiedClass() => true
+        case _ => false
+      }
       val instanceClass =
         rw.currentThis.having(ThisObject(javaInstanceClassSuccessor.ref(cls))) {
           new ByReferenceClass[Post](
@@ -446,6 +451,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             }._1,
             cls.supports.map(rw.dispatch),
             rw.dispatch(lockInvariant),
+            isUnverified
           )(JavaInstanceClassOrigin(cls))
         }
 
@@ -469,6 +475,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             }._1,
             Nil,
             tt,
+            isUnverified,
           )(JavaStaticsClassOrigin(cls))
 
         rw.globalDeclarations.declare(staticsClass)

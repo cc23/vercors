@@ -345,6 +345,7 @@ valKeywordNonExpr: (
  // Spec function keywords
  | VAL_REDUCIBLE | VAL_ADDS_TO | VAL_APERM | VAL_ARRAYPERM | VAL_CONTRIBUTION | VAL_HELD | VAL_HPERM | VAL_IDLE
  | VAL_PERM_VAL | VAL_PERM | VAL_POINTS_TO | VAL_RUNNING | VAL_SOME | VAL_LEFT | VAL_RIGHT | VAL_VALUE
+ | VAL_LOW | VAL_LOW_EVENT | VAL_HIDDEN | VAL_LEAKABLE
 );
 
 valGenericAdtInvocation
@@ -425,7 +426,7 @@ valImpureDef
  ;
 
 valModifier
- : ('pure' | 'inline' | 'thread_local' | 'bip_annotation') //TODO unverified?
+ : ('pure' | 'inline' | 'thread_local' | 'bip_annotation'  | 'modifiable' | 'unverified_class')
  | langStatic # valStatic
  ;
 

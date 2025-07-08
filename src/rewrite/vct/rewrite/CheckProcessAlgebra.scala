@@ -102,6 +102,7 @@ case class CheckProcessAlgebra[Pre <: Generation]()
               }._1,
               Nil,
               tt,
+              false,
             )(model.o)
           }
         globalDeclarations.declare(newClass)
