@@ -116,6 +116,7 @@ case class SpecializeEndpointClasses[Pre <: Generation]()
             typeArgs = Seq(),
             supports = Seq(),
             intrinsicLockInvariant = tt,
+            ucInvariant = tt,
             decls = Seq(implField, constructor),
             isUnverified = false,
           )(endpoint.o.where(indirect =

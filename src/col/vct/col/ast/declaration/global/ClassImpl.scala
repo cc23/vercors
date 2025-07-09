@@ -57,8 +57,11 @@ trait ClassImpl[G] extends Declarator[G] {
   def layoutUnverified(implicit ctx: Ctx): Doc =
     Text("")
 
+  def layoutUCInvariant(implicit ctx: Ctx): Doc =
+    Text("")
+
   def layoutJava(implicit ctx: Ctx): Doc =
-    layoutLockInvariant <+/> Group(
+    layoutLockInvariant <+/> layoutUCInvariant <+/> Group(
       layoutUnverified <+> Text("class") <+> ctx.name(this) <>
         (if (typeArgs.nonEmpty)
            Text("<") <> Doc.args(typeArgs) <> ">"
@@ -74,7 +77,7 @@ trait ClassImpl[G] extends Declarator[G] {
     ) <>> Doc.stack2(layoutLock +: decls) <+/> "}"
 
   def layoutPvl(implicit ctx: Ctx): Doc =
-    layoutLockInvariant <+/> Group(
+    layoutLockInvariant <+/> layoutUCInvariant <+/> Group(
       layoutUnverified <+> Text("class") <+> ctx.name(this) <>
         (if (typeArgs.nonEmpty)
            Text("<") <> Doc.args(typeArgs) <> ">"

@@ -2436,7 +2436,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
           clazz.decls,
           clazz.supports,
           res(clazz.intrinsicLockInvariant),
-          clazz.isUnverified
+          res(clazz.ucInvariant),
+          clazz.isUnverified,
         )
       case clazz: ByValueClass[Pre] => clazz
       case enum: Enum[Pre] => enum
@@ -2474,6 +2475,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
           clazz.modifiers,
           clazz.typeParams,
           res(clazz.intrinsicLockInvariant),
+          res(clazz.ucInvariant),
           clazz.ext,
           clazz.imp,
           clazz.decls,

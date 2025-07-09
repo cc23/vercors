@@ -27,4 +27,13 @@ trait ByReferenceClassImpl[G] extends ByReferenceClassOps[G] {
       else
         ""
     )
+  override def layoutUCInvariant(implicit ctx: Ctx): Doc =
+    if (ucInvariant == tt) { Empty }
+    else {
+      Doc.spec(Show.lazily { c: Ctx =>
+        implicit val ctx: Ctx = c
+        Text("uc_invariant") <+>
+          Nest(ucInvariant.show <> ";" <+/> Empty)
+      })
+    }
 }

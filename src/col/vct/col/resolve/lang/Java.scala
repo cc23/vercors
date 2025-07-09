@@ -435,6 +435,7 @@ case object Java extends LazyLogging {
         imp = cls.getGenericInterfaces.toIndexedSeq
           .map(cls => lazyType(cls, ctx)),
         decls = fields.toIndexedSeq ++ cons.toIndexedSeq ++ methods.toIndexedSeq,
+        ucInvariant = `tt`,
       )(o.where(name = cls.getName.split('.').last))
     }
   }

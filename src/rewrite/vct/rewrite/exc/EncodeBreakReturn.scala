@@ -155,7 +155,7 @@ case class EncodeBreakReturn[Pre <: Generation]() extends Rewriter[Pre] {
           val cls = breakLabelException.getOrElseUpdate(
             label,
             globalDeclarations.declare(
-              new ByReferenceClass[Post](Nil, Nil, Nil, tt, false)(BreakException)
+              new ByReferenceClass[Post](Nil, Nil, Nil, tt, tt, false)(BreakException)
             ),
           )
 
@@ -208,6 +208,7 @@ case class EncodeBreakReturn[Pre <: Generation]() extends Rewriter[Pre] {
                         Nil,
                         Seq(returnField),
                         Nil,
+                        tt,
                         tt,
                         false,
                       )(ReturnClass)

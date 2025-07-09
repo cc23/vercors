@@ -102,6 +102,7 @@ case class CheckProcessAlgebra[Pre <: Generation]()
               }._1,
               Nil,
               tt,
+              tt,
               false,
             )(model.o)
           }

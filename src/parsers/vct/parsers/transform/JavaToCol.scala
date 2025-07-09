@@ -70,6 +70,8 @@ case class JavaToCol[G](
                 args.map(convert(_)).getOrElse(Nil),
                 AstBuildHelpers
                   .foldStar(contract.consume(contract.lock_invariant)),
+                AstBuildHelpers
+                  .foldStar(contract.consume(contract.uc_invariant)),
                 ext.map(convert(_)).getOrElse(Java.JAVA_LANG_OBJECT),
                 imp.map(convert(_)).getOrElse(Nil),
                 decls.flatMap(convert(_)),
@@ -1636,6 +1638,7 @@ case class JavaToCol[G](
         collector.decreases += ((contract, DecreasesClauseNoRecursion()))
       case ValContractClause12(_, Some(clause), _) =>
         collector.decreases += ((contract, convert(clause)))
+      case ValContractClause13(_, invariant, _) => collector.uc_invariant += ((contract, convert(invariant)))
     }
 
   def convert(implicit clause: ValDecreasesMeasureContext): DecreasesClause[G] =

@@ -428,6 +428,13 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           case _: JavaAnnotationInterface[Pre] => tt[Pre]
         }
 
+      val ucInvariant =
+        cls match {
+          case clazz: JavaClass[Pre] => clazz.ucInvariant
+          case _: JavaInterface[Pre] => tt[Pre]
+          case _: JavaAnnotationInterface[Pre] => tt[Pre]
+        }
+
       val isUnverified = cls.modifiers.exists {
         case JavaUnverifiedClass() => true
         case _ => false
@@ -451,6 +458,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             }._1,
             cls.supports.map(rw.dispatch),
             rw.dispatch(lockInvariant),
+            rw.dispatch(ucInvariant),
             isUnverified
           )(JavaInstanceClassOrigin(cls))
         }
@@ -475,6 +483,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             }._1,
             Nil,
             tt,
+            tt, //TODO: having a static UC invariant would also work
             isUnverified,
           )(JavaStaticsClassOrigin(cls))
 

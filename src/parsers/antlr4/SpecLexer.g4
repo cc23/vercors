@@ -83,6 +83,7 @@ VAL_CONTEXT: 'context';
 VAL_LOOP_INVARIANT: 'loop_invariant';
 VAL_KERNEL_INVARIANT: 'kernel_invariant';
 VAL_LOCK_INVARIANT: 'lock_invariant';
+VAL_UC_INVARIANT: 'uc_invariant';
 VAL_SIGNALS: 'signals';
 VAL_DECREASES: 'decreases';
 VAL_DECLASSIFY: 'declassify';

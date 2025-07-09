@@ -729,6 +729,7 @@ final class ByReferenceClass[G](
     val decls: Seq[ClassDeclaration[G]],
     val supports: Seq[Type[G]],
     val intrinsicLockInvariant: Expr[G],
+    val ucInvariant: Expr[G],
     val isUnverified: Boolean = false,
 )(implicit val o: Origin)
     extends Class[G] with ByReferenceClassImpl[G]
@@ -3428,8 +3429,8 @@ final class JavaClass[G](
     val name: String,
     val modifiers: Seq[JavaModifier[G]],
     val typeParams: Seq[Variable[G]],
-    //TODO here add UC invariant
     val intrinsicLockInvariant: Expr[G],
+    val ucInvariant: Expr[G],
     val ext: Type[G],
     val imp: Seq[Type[G]],
     val decls: Seq[ClassDeclaration[G]],

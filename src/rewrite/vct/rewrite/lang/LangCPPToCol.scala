@@ -1351,7 +1351,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     // Create a class that can be used to create a 'this' object
     // It will be linked to the class made near the end of this method.
     val preEventClass: Class[Pre] =
-      new ByReferenceClass(Nil, Nil, Nil, tt, false)(commandGroup.o)
+      new ByReferenceClass(Nil, Nil, Nil, tt, tt, false)(commandGroup.o)
     this.currentThis = Some(
       rw.dispatch(ThisObject[Pre](preEventClass.ref)(preEventClass.o))
     )
@@ -1488,6 +1488,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             Seq(kernelRunner),
         supports = Seq(),
         intrinsicLockInvariant = tt,
+        ucInvariant = tt,
         isUnverified = false,
       )(commandGroup.o.where(name = "SYCL_EVENT_CLASS"))
     rw.globalDeclarations.succeed(preEventClass, postEventClass)

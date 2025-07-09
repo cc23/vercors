@@ -39,6 +39,8 @@ abstract class ToCol[G](
       mutable.ArrayBuffer()
     val lock_invariant: mutable.ArrayBuffer[(ParserRuleContext, Expr[G1])] =
       mutable.ArrayBuffer()
+    val uc_invariant: mutable.ArrayBuffer[(ParserRuleContext, Expr[G1])] =
+      mutable.ArrayBuffer()
 
     val given: mutable.ArrayBuffer[(ParserRuleContext, Variable[G1])] = mutable
       .ArrayBuffer()

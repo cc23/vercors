@@ -52,6 +52,7 @@ valContractClause
  | 'signals' '(' langType langId ')' langExpr ';'
  | 'lock_invariant' langExpr ';'
  | 'decreases' valDecreasesMeasure? ';'
+ | 'uc_invariant' langExpr ';'
  ;
 
 valDecreasesMeasure

@@ -166,6 +166,7 @@ case class PVLToCol[G](
               supports = Nil,
               intrinsicLockInvariant = AstBuildHelpers
                 .foldStar(contract.consume(contract.lock_invariant)),
+              ucInvariant = tt,
               typeArgs = typeArgs.map(convert(_)).getOrElse(Nil),
               isUnverified = false
             )(origin(cls).sourceName(convert(name)))

@@ -173,6 +173,7 @@ case class EncodeGlobalApplicables[Pre <: Generation]() extends Rewriter[Pre] {
         typeArgs = Seq(),
         supports = Seq(),
         intrinsicLockInvariant = tt,
+        ucInvariant = tt,
         isUnverified = false,
       )(program.o.where(name = "G$")).declare()
     )
