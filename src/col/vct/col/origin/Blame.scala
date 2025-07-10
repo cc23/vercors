@@ -1164,6 +1164,23 @@ case class LockTokenNotHeld(node: Unlock[_], failure: ContractFailure)
   override def inlineDescWithSource(node: String, failure: String): String =
     s"`$node` may fail, since the `held` resource may not be exhaled here, since $failure."
 }
+sealed trait LeakFailure extends VerificationFailure
+case class LeakInvariantFailed(node: Leak[_], failure: ContractFailure)
+  extends LeakFailure with WithContractFailure {
+  override def baseCode: String = "leakInvFailed"
+  override def descInContext: String =
+    "The invariant failed during leak operation here, since"
+  override def inlineDescWithSource(node: String, failure: String): String =
+    s"`$node` may fail, since invariant may not hold, since $failure."
+}
+case class LeakInsufficientPermission(node: Leak[_], failure: ContractFailure)
+  extends LeakFailure with WithContractFailure {
+  override def baseCode: String = "leakInsuffPerm"
+  override def descInContext: String =
+    "Leak operation failed here, since"
+  override def inlineDescWithSource(node: String, failure: String): String =
+    s"`$node` may fail, since $failure."
+}
 
 sealed trait ConstructorFailure extends VerificationFailure
 case class CommitFailed(node: Commit[_], failure: ContractFailure)

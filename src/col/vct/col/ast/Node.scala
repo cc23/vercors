@@ -508,10 +508,15 @@ final case class Extract[G](contractedStatement: Statement[G])(
 ) extends NormallyCompletingStatement[G]
     with ControlContainerStatement[G]
     with ExtractImpl[G]
-final case class Declassify[G](res: Expr[G])(implicit val o: Origin)
+final case class Declassify[G](value: Expr[G])(implicit val o: Origin)
   extends NormallyCompletingStatement[G]
   with ExpressionContainerStatement[G]
   with DeclassifyImpl[G]
+final case class Leak[G](obj: Expr[G]
+)(val blame: Blame[LeakFailure])(implicit val o: Origin)
+  extends NormallyCompletingStatement[G]
+    with ExpressionContainerStatement[G]
+    with LeakImpl[G]
 
 sealed trait ExceptionalStatement[G]
     extends Statement[G] with ExceptionalStatementImpl[G]

@@ -91,6 +91,7 @@ valStatement
  | 'extract' langStatement # valExtract
  | 'frame' valContractClause* langStatement # valFrame
  | 'declassify' '(' langExpr ')' # valDeclassify
+ | 'leak' '(' langExpr ')' # valLeak
  ;
 
 valActionImpl
@@ -343,6 +344,7 @@ valKeywordNonExpr: (
  | VAL_EXHALE | VAL_LABEL | VAL_REFUTE | VAL_WITNESS | VAL_GHOST | VAL_SEND | VAL_WORD_TO | VAL_RECV | VAL_FROM
  | VAL_TRANSFER | VAL_CSL_SUBJECT | VAL_SPEC_IGNORE | VAL_ACTION | VAL_ATOMIC
  | VAL_EXTRACT | VAL_FRAME
+ | VAL_DECLASSIFY | VAL_LEAK
  // Spec function keywords
  | VAL_REDUCIBLE | VAL_ADDS_TO | VAL_APERM | VAL_ARRAYPERM | VAL_CONTRIBUTION | VAL_HELD | VAL_HPERM | VAL_IDLE
  | VAL_PERM_VAL | VAL_PERM | VAL_POINTS_TO | VAL_RUNNING | VAL_SOME | VAL_LEFT | VAL_RIGHT | VAL_VALUE

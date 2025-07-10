@@ -1963,6 +1963,7 @@ case class JavaToCol[G](
           },
         )
       case ValDeclassify(_, _, res, _) => Declassify(convert(res))
+      case ValLeak(_, _ , expr, _) => Leak(convert(expr))(blame(stat))
     }
 
   def convert(implicit block: ValBlockContext): Seq[Statement[G]] =

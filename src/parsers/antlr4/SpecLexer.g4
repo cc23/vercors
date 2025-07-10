@@ -86,7 +86,6 @@ VAL_LOCK_INVARIANT: 'lock_invariant';
 VAL_UC_INVARIANT: 'uc_invariant';
 VAL_SIGNALS: 'signals';
 VAL_DECREASES: 'decreases';
-VAL_DECLASSIFY: 'declassify';
 
 VAL_APPLY: 'apply';
 VAL_FOLD: 'fold';
@@ -115,6 +114,8 @@ VAL_SPEC_REPLACE_EXPR: '\\replacing';
 VAL_ACTION: 'action';
 VAL_ATOMIC: 'atomic';
 VAL_COMMIT: 'commit';
+VAL_DECLASSIFY: 'declassify';
+VAL_LEAK: 'leak';
 
 VAL_REDUCIBLE: 'Reducible';
 VAL_ADDS_TO: 'AddsTo';

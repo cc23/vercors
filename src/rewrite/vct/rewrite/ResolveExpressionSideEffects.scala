@@ -445,7 +445,8 @@ case class ResolveExpressionSideEffects[Pre <: Generation]()
         case _: JavaStatement[Pre] => throw ExtraNode
         case _: PVLCommunicateStatement[Pre] => throw ExtraNode
         case _: LLVMStatement[Pre] => throw ExtraNode
-        case declassify: Declassify[Pre] => declassify.rewriteDefault()
+        case Declassify(value) => frame(value, Declassify(_))
+        case leak @ Leak(obj) => frame(obj, Leak(_)(leak.blame))
       }
     }
 
