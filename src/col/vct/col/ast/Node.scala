@@ -2406,7 +2406,7 @@ final case class Low[G](expr: Expr[G])(implicit val o: Origin)
 final case class LowEvent[G]()(implicit val o: Origin)
 extends Expr[G] with LowEventImpl[G]
 
-final case class Hidden[G](expr: Expr[G], perm: Expr[G])(implicit val o: Origin)
+final case class Hidden[G](expr: Expr[G])(implicit val o: Origin)
   extends Expr[G] with HiddenImpl[G]
 final case class Leakable[G](expr: Expr[G])(implicit val o: Origin)
   extends Expr[G] with LeakableImpl[G]

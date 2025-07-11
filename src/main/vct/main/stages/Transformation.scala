@@ -25,7 +25,7 @@ import vct.parsers.debug.DebugOptions
 import vct.resources.Resources
 import vct.result.VerificationError.SystemError
 import vct.rewrite.adt.{EncodeBitVectors, ImportSetCompat}
-import vct.rewrite.{DisambiguatePredicateExpression, EncodeAssuming, EncodeAutoValue, EncodeByValueClassUsage, EncodePointerComparison, EncodeRange, EncodeResourceValues, ExplicitResourceValues, GenerateSingleOwnerPermissions, HeapVariableToRef, InlineTrivialLets, LowerLocalHeapVariables, MakeUniqueMethodCopies, MonomorphizeClass, ResolveLeak, SmtlibToProverTypes, TypeQualifierCoercion, VariableToPointer}
+import vct.rewrite.{DisambiguatePredicateExpression, EncodeAssuming, EncodeAutoValue, EncodeByValueClassUsage, EncodePointerComparison, EncodeRange, EncodeResourceValues, ExplicitResourceValues, GenerateSingleOwnerPermissions, HeapVariableToRef, HiddenLeakableToPredicates, InlineTrivialLets, LowerLocalHeapVariables, MakeUniqueMethodCopies, MonomorphizeClass, ResolveLeak, SmtlibToProverTypes, TypeQualifierCoercion, VariableToPointer}
 import vct.rewrite.lang.ReplaceSYCLTypes
 import vct.rewrite.pallas.{InlinePallasPermLets, InlinePallasWrappers, ResolvePallasQuantifiers}
 import vct.rewrite.veymont._
@@ -353,6 +353,7 @@ case class SilverTransformation(
         // Delete stuff that may be declared unsupported at a later stage
         FilterSpecIgnore,
 
+        HiddenLeakableToPredicates,
         // Disambiguate AST
         // Make sure Disambiguate comes after CFloatIntCoercion, so CInts are gone
         Disambiguate, // Resolve overloaded operators (+, subscript, etc.)

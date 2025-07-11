@@ -10,5 +10,5 @@ trait HiddenImpl[G] extends HiddenOps[G] {
 
   override def precedence: Int = Precedence.ATOMIC
 
-  override def layout(implicit ctx: Ctx): Doc = Text("hidden(") <> expr <> ", " <> perm <> ")"
+  override def layout(implicit ctx: Ctx): Doc = Text("hidden(") <> expr <> ")"
 }

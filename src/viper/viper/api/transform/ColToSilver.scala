@@ -180,12 +180,7 @@ case class ColToSilver(program: col.Program[_]) {
       domains.toSeq,
       fields.values.toSeq,
       functions.toSeq,
-      predicates.toSeq ++ Seq(
-        Predicate(hiddenPred, Seq(LocalVarDecl("this", silver.Ref)(pos = pos(program), info = NodeInfo(program))), None)
-          (pos = pos(program), info = NodeInfo(program)),
-        Predicate(leakablePred, Seq(LocalVarDecl("this", silver.Ref)(pos = pos(program), info = NodeInfo(program))), None)
-        (pos = pos(program), info = NodeInfo(program))
-      ),
+      predicates.toSeq,
       methods.toSeq,
       extensions = Seq(),
     )()
@@ -339,6 +334,7 @@ case class ColToSilver(program: col.Program[_]) {
       case col.TInt() => silver.Int
       case col.TRational() => silver.Perm
       case col.TRef() => silver.Ref
+      case col.TAny() => silver.Ref
       case col.TSeq(element) => silver.SeqType(typ(element))
       case col.TSet(element) => silver.SetType(typ(element))
       case col.TBag(element) => silver.MultisetType(typ(element))
@@ -771,14 +767,6 @@ case class ColToSilver(program: col.Program[_]) {
 
       case col.Low(expr) => SIFLowExp(exp(expr))(pos = pos(e), info = expInfo(e))
       case col.LowEvent() => SIFLowEventExp()(pos = pos(e), info = expInfo(e))
-      case col.Hidden(expr, perm) => silver.PredicateAccessPredicate(
-          silver.PredicateAccess(Seq(exp(expr)), hiddenPred)(pos = pos(e), info = expInfo(e)),
-          Some(exp(perm))
-        )(pos = pos(e), info = expInfo(e))
-      case col.Leakable(expr) => silver.PredicateAccessPredicate(
-          silver.PredicateAccess(Seq(exp(expr)), leakablePred)(pos = pos(e), info = expInfo(e)),
-          Some(silver.WildcardPerm()(pos = pos(e), info = expInfo(e)))
-        )(pos = pos(e), info = expInfo(e))
       case other => ??(other)
     }
 

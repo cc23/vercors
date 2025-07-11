@@ -308,7 +308,7 @@ valPrimary
  | '(' '\\asserting' langExpr ';' langExpr ')' # valAsserting
  | 'low' '(' langExpr ')' # valLow
  | 'lowEvent' # valLowEvent
- | 'hidden' '(' langExpr ',' langExpr ')' #valHidden
+ | 'hidden' '(' langExpr ')' #valHidden
  | 'leakable' '(' langExpr ')' # valLeakable
  ;
 

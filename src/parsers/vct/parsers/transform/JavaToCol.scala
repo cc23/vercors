@@ -2561,7 +2561,7 @@ case class JavaToCol[G](
         Asserting(convert(assn), convert(inner))(blame(e))
       case ValLow(_, _, expr, _) => Low(convert(expr))
       case ValLowEvent(_) => LowEvent()
-      case ValHidden(_,_, expr, _, perm, _) => Hidden(convert(expr), convert(perm))
+      case ValHidden(_, _, expr, _) => Hidden(convert(expr))
       case ValLeakable(_, _, expr, _) => Leakable(convert(expr))
     }
 

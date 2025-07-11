@@ -2244,7 +2244,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case ChorExpr(expr) => ChorExpr(bool(expr))
       case Low(expr) => Low(expr)
       case LowEvent() => LowEvent()
-      case h @ Hidden(expr, perm) => Hidden(expr, rat(perm))
+      case h @ Hidden(expr) => Hidden(expr)
       case l @ Leakable(expr) => Leakable(expr)
     }
   }
