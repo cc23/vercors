@@ -835,6 +835,7 @@ final class Constructor[G](
     val body: Option[Statement[G]],
     val contract: ApplicableContract[G],
     val inline: Boolean = false,
+    val isPrivate: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends ClassDeclaration[G] with AbstractMethod[G] with ConstructorImpl[G]
 @scopes[LabelDecl]
@@ -847,6 +848,7 @@ final class InstanceMethod[G](
     val contract: ApplicableContract[G],
     val inline: Boolean = false,
     val pure: Boolean = false,
+    val isPrivate: Boolean = false
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends ClassDeclaration[G]
     with AbstractMethod[G]

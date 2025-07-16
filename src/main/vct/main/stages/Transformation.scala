@@ -25,7 +25,7 @@ import vct.parsers.debug.DebugOptions
 import vct.resources.Resources
 import vct.result.VerificationError.SystemError
 import vct.rewrite.adt.{EncodeBitVectors, ImportSetCompat}
-import vct.rewrite.{DisambiguatePredicateExpression, EncodeAssuming, EncodeAutoValue, EncodeByValueClassUsage, EncodePointerComparison, EncodeRange, EncodeResourceValues, ExplicitResourceValues, GenerateSingleOwnerPermissions, HeapVariableToRef, HiddenLeakableToPredicates, InlineTrivialLets, LowerLocalHeapVariables, MakeUniqueMethodCopies, MonomorphizeClass, ResolveLeak, SmtlibToProverTypes, TypeQualifierCoercion, VariableToPointer}
+import vct.rewrite.{DisambiguatePredicateExpression, EncodeAssuming, EncodeAutoValue, EncodeByValueClassUsage, EncodePointerComparison, EncodeRange, EncodeResourceValues, ExplicitResourceValues, GenerateSingleOwnerPermissions, HeapVariableToRef, HiddenLeakableToPredicates, InlineTrivialLets, LowerLocalHeapVariables, MakeUniqueMethodCopies, MonomorphizeClass, SIFWithUnverifiedCodeEncoding, SmtlibToProverTypes, TypeQualifierCoercion, VariableToPointer}
 import vct.rewrite.lang.ReplaceSYCLTypes
 import vct.rewrite.pallas.{InlinePallasPermLets, InlinePallasWrappers, ResolvePallasQuantifiers}
 import vct.rewrite.veymont._
@@ -436,9 +436,9 @@ case class SilverTransformation(
         // Resolve side effects including method invocations, for encodetrythrowsignals.
         ResolveExpressionSideChecks,
         ResolveExpressionSideEffects,
+        SIFWithUnverifiedCodeEncoding,
         EncodeTryThrowSignals, //changed for SIFTryCatch:
         ResolveScale,
-        ResolveLeak,
         MonomorphizeClass,
         // No more classes
         ClassToRef,

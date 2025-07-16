@@ -317,6 +317,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                         )
                     )
                   },
+                isPrivate = cons.modifiers.collectFirst {case JavaPrivate() => ()}.nonEmpty
               )(cons.blame)(JavaConstructorOrigin(cons))
             )
           }
@@ -396,6 +397,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             method.modifiers.collectFirst { case JavaInline() => () }.nonEmpty,
           pure =
             method.modifiers.collectFirst { case JavaPure() => () }.nonEmpty,
+          isPrivate = method.modifiers.collectFirst { case JavaPrivate() => () }.nonEmpty
         )(method.blame)(JavaMethodOrigin(method))
       )
     }

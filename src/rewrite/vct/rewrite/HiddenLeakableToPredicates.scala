@@ -2,23 +2,35 @@ package vct.rewrite
 
 import vct.col.ast._
 import vct.col.origin._
-import vct.col.resolve.lang.Java.JAVA_LANG_OBJECT
 import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.util.SuccessionMap
+import vct.rewrite.HiddenLeakableToPredicates.{
+  HiddenLeakableImpl,
+  hiddenPredName,
+  leakablePredName,
+}
 
 case object HiddenLeakableToPredicates extends RewriterBuilder {
+  val hiddenPredName: PreferredName = PreferredName(Seq("hiddenPred"))
+  val leakablePredName: PreferredName = PreferredName(Seq("leakablePred"))
 
   override def key: String = "hiddenLeakableToPreds"
 
   override def desc: String =
     "Translate the hidden and leakable expressions into predicates."
+
+  case class HiddenLeakableImpl() extends OriginContent {
+
+  }
 }
 
 case class HiddenLeakableToPredicates[Pre <: Generation]() extends Rewriter[Pre] {
   val onceStuff : SuccessionMap[String, Predicate[Post]] = SuccessionMap()
-  val origin: Origin = new Origin(Seq())
-  val hiddenPred : Predicate[Post] = new Predicate[Post](Seq(new Variable(TAny())(origin)), None, false, false)(origin)
-  val leakablePred : Predicate[Post]= new Predicate[Post](Seq(new Variable(TAny())(origin)), None, false, false)(origin)
+  val hiddenPred : Predicate[Post] = new Predicate[Post](Seq(new Variable(TAny())(Origin(Seq(PreferredName(Seq("obj")))))), None, false, false
+  )(Origin(Seq(hiddenPredName, HiddenLeakableImpl())))
+  val leakablePred : Predicate[Post]= new Predicate[Post](Seq(new Variable(TAny())(Origin(Seq(PreferredName(Seq("obj")))))),
+    None, false, false
+  )(Origin(Seq(leakablePredName, HiddenLeakableImpl())))
 
   override def dispatch(loc: Location[Pre]): Location[Post] = {
     implicit val o: Origin = loc.o
@@ -44,8 +56,6 @@ case class HiddenLeakableToPredicates[Pre <: Generation]() extends Rewriter[Pre]
     onceStuff.getOrElseUpdate("hiddenPred", {
       globalDeclarations.declare(hiddenPred)
     })
-    val obj = JAVA_LANG_OBJECT
-    val ttype = TType(JAVA_LANG_OBJECT)
     onceStuff.getOrElseUpdate("leakablePred", {
       globalDeclarations.declare(leakablePred)
     })
