@@ -810,7 +810,7 @@ public class MainTransformer<T> {
         // Generate contract and method and return
         ApplicableContract<T> contract = col_system.to_applicable_contract(col_system.TRUE, col_system.fold_star(ensures));
         return new InstanceMethod<>(col_system.T_INT, params, col_system.NO_VARS, col_system.NO_VARS, Option.empty(), contract,
-                false, true, false, new GeneratedBlame<>(), OriGen.create("find_minimum_advance"));
+                false, true, true, new GeneratedBlame<>(), OriGen.create("find_minimum_advance"));
     }
 
     /**
@@ -873,7 +873,7 @@ public class MainTransformer<T> {
         // Generate contract and method and return
         ApplicableContract<T> contract = col_system.to_applicable_contract(context, col_system.fold_star(ensures));
         return new InstanceMethod<>(col_system.T_VOID, params, col_system.NO_VARS, col_system.NO_VARS, Option.empty(), contract,
-                false, false, false, new GeneratedBlame<>(), OriGen.create("update_events"));
+                false, false, true, new GeneratedBlame<>(), OriGen.create("update_events"));
     }
 
     /**
@@ -1039,7 +1039,7 @@ public class MainTransformer<T> {
      */
     private InstanceMethod<T> create_abstract_method(ApplicableContract<T> contract, String method_name) {
         return new InstanceMethod<>(col_system.T_VOID, col_system.NO_VARS, col_system.NO_VARS, col_system.NO_VARS, Option.empty(),
-                contract, false, false, false, new GeneratedBlame<>(), OriGen.create(method_name));
+                contract, false, false, true, new GeneratedBlame<>(), OriGen.create(method_name));
     }
 
     /**
@@ -1052,7 +1052,7 @@ public class MainTransformer<T> {
         Expr<T> context = create_scheduler_contract();
         ApplicableContract<T> contract = col_system.to_applicable_contract(context, context);
         scheduler = new InstanceMethod<>(col_system.T_VOID, col_system.NO_VARS, col_system.NO_VARS, col_system.NO_VARS,
-                Option.apply(body), contract, false, false, false, new GeneratedBlame<>(), OriGen.create("main"));
+                Option.apply(body), contract, false, false, true, new GeneratedBlame<>(), OriGen.create("main"));
     }
 
     /**
