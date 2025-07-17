@@ -33,6 +33,12 @@ case class InsufficientPermissionDuringLeak(leak: Leak[_])
     leak.blame.blame(LeakInsufficientPermission(leak, error.failure))
 }
 
+case class InvocationNotLowEvent(node: InvokingNode[_])
+    extends Blame[AssertFailed] {
+  override def blame(error: AssertFailed): Unit =
+    node.blame.blame(InvocationMustBeLowEvent(node))
+}
+
 case class SecondMethodVerificationFailed(app: InstanceMethod[_])
   extends Blame[CallableFailure] {
 
@@ -156,6 +162,41 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
   override def dispatch(stat: Statement[Pre]): Statement[Post] = {
     implicit val o: Origin = stat.o
     stat match {
+      case invCons : InvokeConstructor[_] =>
+        if(invCons.outArgs.nonEmpty){
+          throw SIFUCUnsupported(invCons, "ConstructorInvocations with outArgs not supported.")
+        }
+        val res: Local[Post] = dispatch(invCons.out) match {
+          case l : Local[_] => l
+          case other => throw SIFUCUnsupported(invCons, s"outArg of ConstructorInvocations should be Local and not ${other.getClass}.")
+        }
+        val cls = invCons.cls match {
+          case clazz: ByReferenceClass[_] => clazz
+          case _ => throw SIFUCUnsupported(invCons, "Only supports ConstructorInvocations of ByReferenceClasses.")
+        }
+        val args: Seq[Expr[Post]] = invCons.args.map(dispatch)
+          //skip first argument = tid
+          .tail
+        if(cls.isUnverified){
+          Block(
+            args.map { arg =>
+              Assert(Low(arg))(err => invCons.blame.blame(InvocationSIFUCFailure(invCons, err.failure)))(arg.o)
+            }
+              ++
+              args.filter(arg => noPrimitiveType(arg.t))
+              .map{arg => Assert(leakable(arg))(err => invCons.blame.blame(InvocationSIFUCFailure(invCons, err.failure)))(arg.o)}
+              ++
+            Seq[Statement[Post]](
+              Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
+              invCons.rewriteDefault(),
+              Assume(Low(res))(invCons.o)
+          ))
+        } else {
+          Block(Seq(
+            Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
+            invCons.rewriteDefault(),
+          ))
+        }
       case l @ Leak(obj) =>
         val newObj = dispatch(obj)
         Assert(Leakable[Post](newObj))(InsufficientPermissionDuringLeak(

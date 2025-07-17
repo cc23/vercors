@@ -318,6 +318,32 @@ case class ContextEverywhereFailedInPre(
   override def inlineDescWithSource(node: String, failure: String): String =
     s"Context of `$node` may not hold in the precondition, since $failure."
 }
+
+case class InvocationMustBeLowEvent(node: InvokingNode[_]) extends InvocationFailure {
+
+  override def position: String = node.o.shortPositionText
+
+  override def code: String = s"invocationNotLowEvent"
+
+  override def desc: String =
+    Message.messagesInContext(
+      (node.o, s"Invocation of this should be lowEvent."),
+    )
+
+  override def inlineDesc: String =
+    s"Invocation of '${node.o.inlineContextText}' should be lowEvent."
+}
+
+case class InvocationSIFUCFailure(node: InvokingNode[_], failure: ContractFailure)
+  extends InvocationFailure with WithContractFailure {
+  override def baseCode: String = "invocationSIFUCFailure"
+
+  override def descInContext: String = "Invocation may violate SIF-UC encoding, since "
+
+  override def inlineDescWithSource(node: String, failure: String): String =
+    s"Invocation `$node` may violate SIF-UC encoding, since $failure."
+}
+
 case class SYCLItemMethodPreconditionFailed(node: InvokingNode[_])
     extends NodeVerificationFailure with FrontendInvocationError {
   override def code: String = "syclItemMethodPreFailed"
