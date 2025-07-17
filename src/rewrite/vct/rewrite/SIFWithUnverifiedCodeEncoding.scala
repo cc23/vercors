@@ -5,9 +5,10 @@ import hre.util.ScopedStack
 import vct.col.ast.{InstanceField, _}
 import vct.col.origin._
 import vct.col.ref.Ref
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
+import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
 import vct.col.util.AstBuildHelpers.tt
 import vct.col.util.Substitute
+import vct.result.VerificationError.SystemError
 import vct.rewrite.HiddenLeakableToPredicates.{hiddenPredName, leakablePredName}
 
 case object SIFWithUnverifiedCodeEncoding extends RewriterBuilder {
@@ -16,10 +17,42 @@ case object SIFWithUnverifiedCodeEncoding extends RewriterBuilder {
     "Resolve the leak operation for partially verified code."
 }
 
+case class SIFUCUnsupportedNode(node: Node[_]) extends SystemError {
+  override def text: String =
+    node.o.messageInContext("Node not supported in SIF UC Encoding")
+}
+
+case class SIFUCUnsupported(node: Node[_], message : String) extends SystemError {
+  override def text: String =
+    node.o.messageInContext(message)
+}
+
 case class InsufficientPermissionDuringLeak(leak: Leak[_])
     extends Blame[AssertFailed] {
   override def blame(error: AssertFailed): Unit =
     leak.blame.blame(LeakInsufficientPermission(leak, error.failure))
+}
+
+case class SecondMethodVerificationFailed(app: InstanceMethod[_])
+  extends Blame[CallableFailure] {
+
+  override def blame(error: CallableFailure): Unit = {
+    error match {
+      case p: PostconditionFailed => app.blame.blame(SecondVerificationPostFailed(app, p.failure))
+      case _ => app.blame.blame(error)
+    }
+  }
+}
+
+case class SecondConstructorVerificationFailed(app: Constructor[_])
+  extends Blame[CallableFailure] {
+
+  override def blame(error: CallableFailure): Unit = {
+    error match {
+      case p: PostconditionFailed => app.blame.blame(SecondVerificationPostFailed(app, p.failure))
+      case _ => app.blame.blame(error)
+    }
+  }
 }
 
 case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[Pre] with LazyLogging {
@@ -45,6 +78,8 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     def dispatch(stat : Statement[Pre]) : Statement[Pre] = sub.dispatch(stat)
 
     def dispatch(sig : SignalsClause[Pre]) : SignalsClause[Pre] = sub.dispatch(sig)
+
+    def dispatch(t : Type[Pre]) : Type[Pre] = sub.dispatch(t)
   }
 
   private def noPrimitiveType(t: Type[Post]): Boolean =
@@ -76,9 +111,15 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     // leakable read and write permissions can be used interchangeably
     Value(PredicateLocation(PredicateApply(leakablePredRef, Seq(obj))))
   }
+
+  private def inhaleAllLowAndLeakable(variables: Seq[Variable[Post]])(implicit o : Origin) : Seq[Statement[Post]] =
+    variables.filter(arg => noPrimitiveType(arg.t))
+      .map(arg => Inhale(leakable(Local(arg.ref[Variable[Post]])))) ++
+      variables.map(arg => Assume(Low(Local(arg.ref[Variable[Post]]))))
+
   private def declareNewVar[G](arg: Variable[G]): Variable[G] = {
     new Variable(arg.t)(origin(
-      arg.o.getPreferredNameOrElse(Seq("unknown_cons_arg"))
+      arg.o.getPreferredNameOrElse(Seq("unknown_var"))
     ))
   }
 
@@ -142,21 +183,20 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         val cls: Ref[Post, Class[Post]] = succ(cons.cls.decl)
         val contractH = dispatch(cons.contract)
 
-        val consH: Constructor[Post] = cons.rewrite(
-          body = cons.body.map(stat => Block[Post](
-            Seq(
-              Inhale(hiddenWrite(ThisObject(cls))),
-              Assume(Low(ThisObject(cls))),
-              dispatch(stat),
-            ))),
-          contract = contractH.copy(ensures =
+        cons.rewrite(
+            body = cons.body.map(stat => Block[Post](
+              Seq(
+                Inhale(hiddenWrite(ThisObject(cls))),
+                Assume(Low(ThisObject(cls))),
+                dispatch(stat),
+              ))),
+            contract = contractH.copy(ensures =
               SplitAccountedPredicate(
                 contractH.ensures,
                 UnitAccountedPredicate(Low(ThisObject(cls))),
               )
             )(PanicBlame("Every constructor always ensures low('this')")),
-        )
-        consH.succeed(cons)
+          ).succeed(cons)
 
         if(!cons.isPrivate){
           val argSub = new ArgSubstitute(cons.args, cons.outArgs, cons.typeArgs)
@@ -168,11 +208,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               variables.dispatch(argSub.newOutArgs),
               variables.dispatch(argSub.newTypeArgs),
               cons.body.map(stat => {
-                Block(
-                  newArgs.filter(arg => noPrimitiveType(arg.t))
-                    .map(arg => Inhale(leakable(Local(arg.ref[Variable[Post]]))))
-                    ++
-                    newArgs.map(arg => Assume(Low(Local(arg.ref[Variable[Post]]))))
+                Block(inhaleAllLowAndLeakable(newArgs)
                     ++
                     Seq[Statement[Post]](
                       Inhale(hiddenWrite(ThisObject(cls))),
@@ -198,7 +234,56 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               )(PanicBlame("SIF Encoding postcondition should never be unsatisfiable")),
               false,
               false,
-            )(origin("constructor_l"))
+            )(SecondConstructorVerificationFailed(cons))(origin("constructor_l"))
+          )
+        }
+      case m: InstanceMethod[_] =>
+        val cls: Ref[Post, Class[Post]] = succ(currentClass.top)
+        classDeclarations.succeed(m, m.rewriteDefault())
+        if(!m.isPrivate){
+          if(m.outArgs.size > 1){
+            throw SIFUCUnsupported(m, "Method has too many outArgs")
+          }
+
+          if(!m.returnType.isInstanceOf[TVoid[Pre]]){
+            throw SIFUCUnsupported(m, "At this point the return type should always be void")
+          }
+          val argSub = new ArgSubstitute(m.args, m.outArgs, m.typeArgs)
+          val newArgs = variables.dispatch(argSub.newArgs)
+          val retVar: Option[Variable[Post]] = argSub.newOutArgs.find(!_.t.isInstanceOf[TVoid[Pre]])
+            .map(variables.dispatch)
+          classDeclarations.declare(
+            new InstanceMethod(dispatch(argSub.dispatch(m.returnType)),
+              newArgs,
+              retVar.toSeq,
+              variables.dispatch(argSub.newTypeArgs),
+              m.body.map(stat => Block(
+                  inhaleAllLowAndLeakable(newArgs)
+                    ++
+                    Seq[Statement[Post]](
+                      Assume(LowEvent()),
+                      Inhale(leakable(ThisObject(cls))),
+                      Assume(Low(ThisObject(cls))),
+                      dispatch(argSub.dispatch(stat)),
+                    )
+              )),
+              ApplicableContract(emptyAccountedPredicate,
+                retVar.map(ret => getAccountedPredicate(
+                  Option.when(noPrimitiveType(ret.t))(leakable(Local(ret.ref))).toSeq
+                    :+ Low(Local(ret.ref)))
+                  )
+                  .getOrElse(emptyAccountedPredicate),
+                //TODO check other contract parameters
+                tt,
+                m.contract.signals.map(sig => dispatch(argSub.dispatch(sig))),
+                Seq(),
+                Seq(),
+                None
+              )(PanicBlame("SIF Encoding postcondition should never be unsatisfiable")),
+              false,
+              false,
+              false
+          )(SecondMethodVerificationFailed(m))(origin(m.o.getPreferredNameOrElse(Seq("unknown_method"))))
           )
         }
 
@@ -212,5 +297,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       case other => allScopes.anySucceed(decl, decl.rewriteDefault())
     }
   }
+
+
 
 }

@@ -343,6 +343,31 @@ case class PostconditionFailed(
     s"Postcondition of `$node` may not hold, since $failure."
 }
 
+case object Blame2ndVerificationError extends SystemError {
+  override def text: String = "Unknown error in SecondVerificationPostFailed."
+}
+
+case class SecondVerificationPostFailed(node: ContractApplicable[_], failure: ContractFailure)
+  extends CallableFailure {
+
+  private val lowOrLeakable: String = failure match {
+    case ContractFalse(_) => "low"
+    case InsufficientPermissionToExhale(_) => "leakable"
+    case _ => throw Blame2ndVerificationError
+  }
+  override def position: String = node.o.shortPositionText
+
+  override def code: String = s"2ndVerificationPostFailed:${failure.code}"
+
+  override def desc: String =
+    Message.messagesInContext(
+      (node.o, s"Result of this public member might not be $lowOrLeakable, when called from UC."),
+    )
+
+  override def inlineDesc: String =
+    s"Result of public member '${node.o.inlineContextText}' might not be $lowOrLeakable, when called from UC."
+}
+
 sealed trait TerminationMeasureFailed extends ContractedFailure
 
 case class DecreaseTerminationMeasureFailed(
