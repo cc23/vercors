@@ -1021,6 +1021,8 @@ final case class Final[G]()(implicit val o: Origin)
     extends FieldFlag[G] with FinalImpl[G]
 final case class Modifiable[G]()(implicit val o: Origin)
 extends FieldFlag[G] with ModifiableImpl[G]
+final case class Private[G]()(implicit val o: Origin)
+  extends FieldFlag[G] with PrivateImpl[G]
 
 @family
 sealed trait Coercion[G] extends NodeFamily[G] with CoercionImpl[G]

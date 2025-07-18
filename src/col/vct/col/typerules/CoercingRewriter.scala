@@ -2800,6 +2800,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
     node match {
       case value: Final[_] => value
       case value: Modifiable[_] => value
+      case value: Private[_] => value
     }
   }
 

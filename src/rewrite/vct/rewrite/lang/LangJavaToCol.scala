@@ -152,6 +152,7 @@ case class LangJavaToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               flags = fields.modifiers.collect {
                 case JavaFinal() => new Final[Post]()
                 case JavaModifiableField() => new Modifiable[Post]()
+                case JavaPrivate() => new Private[Post]()
               },
             )(JavaFieldOrigin(fields, idx))
           rw.classDeclarations.declare(javaFieldsSuccessor((fields, idx)))
