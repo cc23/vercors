@@ -5,7 +5,7 @@ import hre.util.ScopedStack
 import vct.col.ast.{InstanceField, _}
 import vct.col.origin._
 import vct.col.ref.Ref
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
+import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.util.AstBuildHelpers.tt
 import vct.col.util.Substitute
 import vct.result.VerificationError.SystemError
@@ -168,7 +168,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         }
         val res: Local[Post] = dispatch(invCons.out) match {
           case l : Local[_] => l
-          case other => throw SIFUCUnsupported(invCons, s"outArg of ConstructorInvocations should be Local and not ${other.getClass}.")
+          case other => throw SIFUCUnsupported(invCons, s"Result variable of ConstructorInvocation should be Local and not ${other.getClass}.")
         }
         val cls = invCons.cls match {
           case clazz: ByReferenceClass[_] => clazz
@@ -189,13 +189,50 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             Seq[Statement[Post]](
               Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
               invCons.rewriteDefault(),
-              Assume(Low(res))(invCons.o)
+              Assume(Low(res))(invCons.o),
+              Inhale(leakable(res)),
           ))
         } else {
           Block(Seq(
             Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
             invCons.rewriteDefault(),
           ))
+        }
+      case mInv : InvokeMethod[_] =>
+        val cls: ByReferenceClass[Pre] = mInv.obj.t match { //TODO track RuntimeClass
+          case tClass: TByReferenceClass[Pre] => tClass.cls.decl match {
+            case clazz: ByReferenceClass[_] => clazz
+            case _ => throw SIFUCUnsupported(mInv, "Only supports MethodInvocation on ByReferenceClasses.")
+          }
+          case _ => throw SIFUCUnsupported(mInv, "Only supports MethodInvocation on ByReferenceClasses.")
+        }
+        if (cls.isUnverified) {
+          if (mInv.outArgs.size > 1) {
+            throw SIFUCUnsupported(mInv, "Too many outArgs for MethodInvocation.")
+          }
+          val res: Local[Post] = dispatch(mInv.outArgs.head) match {
+            case l: Local[_] => l
+            case other => throw SIFUCUnsupported(mInv, s"Result variable of MethodInvocation should be Local and not ${other.getClass}.")
+          }
+          val args: Seq[Expr[Post]] = mInv.args.tail.map(dispatch) //skip first argument = tid
+          Block(
+            args.map { arg =>
+              Assert(Low(arg))(err => mInv.blame.blame(InvocationSIFUCFailure(mInv, err.failure)))(arg.o)
+            }
+              ++
+              args.filter(arg => noPrimitiveType(arg.t))
+                .map { arg => Assert(leakable(arg))(err => mInv.blame.blame(InvocationSIFUCFailure(mInv, err.failure)))(arg.o) }
+              ++
+              Seq[Statement[Post]](
+                Assert(LowEvent())(_ => mInv.blame.blame(InvocationMustBeLowEvent(mInv))),
+                Assert(Low(dispatch(mInv.obj)))(err => mInv.blame.blame(InvocationSIFUCFailure(mInv, err.failure)))(mInv.obj.o),
+                mInv.rewriteDefault(),
+                Assume(Low(res))
+              )
+              ++ (if (noPrimitiveType(res.t)) Seq(Inhale(leakable(res))) else Seq())
+          )
+        } else{
+          mInv.rewriteDefault()
         }
       case l @ Leak(obj) =>
         val newObj = dispatch(obj)
