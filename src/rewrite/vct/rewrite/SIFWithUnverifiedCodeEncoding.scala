@@ -310,11 +310,25 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             ))
           }
         } else {
-          if(isModifiable){
+          if (isModifiable) {
             logger.warn(s"Field $fieldRef is public, no need to annotate it with 'modifiable'.")
           }
-          //TODO public
-          assign.rewriteDefault()
+          // public / protected / package-private
+          val tempVar: Variable[Post] = variables.dispatch(declareNewVar[Pre](fieldRef.decl))
+          val temp: Local[Post] = Local(tempVar.ref)
+          Block(Seq(
+            Assert(
+              Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                Greater(curPermHidden(x), IntegerValue(0)))
+            )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+            ifLeakableElse(x,
+              ifBody = Scope(Seq(tempVar), Block(Seq[Statement[Post]](
+                Inhale(leakable(temp)),
+                Assume(Implies(Low(x), Low(temp))),
+                Assign(y, temp)(PanicBlame("assign local <- local should never fail")),
+              ))),
+              elseBody = assign.rewriteDefault())
+          ))
         }
 
       //Field writes
