@@ -95,6 +95,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
   private def getAllModifiableFields[G](cls : ByReferenceClass[G]): Seq[InstanceField[G]] = {
     cls.decls.collect { case field: InstanceField[_] => field }
       .filter(_.flags.collect { case p : Private[_] => p}.nonEmpty)
+      .filter(_.flags.collect { case p : Modifiable[_] => p}.nonEmpty)
   }
 
   private def noop(implicit o: Origin): Statement[Post] = Block[Post](Seq())
