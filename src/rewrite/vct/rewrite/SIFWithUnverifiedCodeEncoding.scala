@@ -5,9 +5,9 @@ import hre.util.ScopedStack
 import vct.col.ast.{InstanceField, _}
 import vct.col.origin._
 import vct.col.ref.Ref
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
+import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
 import vct.col.util.AstBuildHelpers.tt
-import vct.col.util.Substitute
+import vct.col.util.{PredicateExpSubstitute, Substitute}
 import vct.result.VerificationError.SystemError
 import vct.rewrite.HiddenLeakableToPredicates.{hiddenPredName, leakablePredName}
 
@@ -31,12 +31,6 @@ case class InsufficientPermissionDuringLeak(leak: Leak[_])
     extends Blame[AssertFailed] {
   override def blame(error: AssertFailed): Unit =
     leak.blame.blame(LeakInsufficientPermission(leak, error.failure))
-}
-
-case class InvocationNotLowEvent(node: InvokingNode[_])
-    extends Blame[AssertFailed] {
-  override def blame(error: AssertFailed): Unit =
-    node.blame.blame(InvocationMustBeLowEvent(node))
 }
 
 case class SecondMethodVerificationFailed(app: InstanceMethod[_])
@@ -64,10 +58,10 @@ case class SecondConstructorVerificationFailed(app: Constructor[_])
 case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[Pre] with LazyLogging {
 
   private class ArgSubstitute (oldArgs: Seq[Variable[Pre]], oldOutArgs : Seq[Variable[Pre]], oldTypeArgs : Seq[Variable[Pre]])  {
-    val newArgs : Seq[Variable[Pre]] = oldArgs.map(declareNewVar)
-    val newOutArgs: Seq[Variable[Pre]] = oldOutArgs.map(declareNewVar)
+    val newArgs : Seq[Variable[Pre]] = oldArgs.map(declareNewVar[Pre])
+    val newOutArgs: Seq[Variable[Pre]] = oldOutArgs.map(declareNewVar[Pre])
     // TypeArgs do not seem to be supported by VerCors currently
-    val newTypeArgs: Seq[Variable[Pre]] = oldTypeArgs.map(declareNewVar)
+    val newTypeArgs: Seq[Variable[Pre]] = oldTypeArgs.map(declareNewVar[Pre])
 
     private val expSubs: Map[Expr[Pre], Expr[Pre]] = ((oldArgs ++ oldOutArgs).map[Expr[Pre]](a => Local[Pre](a.ref)(a.o))
       zip
@@ -98,8 +92,9 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     Inhale(leakable(obj))
   }
 
-  private def getAllFields: Seq[InstanceField[Pre]] = {
-    currentClass.top.decls.collect { case field: InstanceField[_] => field }
+  private def getAllModifiableFields[G](cls : ByReferenceClass[G]): Seq[InstanceField[G]] = {
+    cls.decls.collect { case field: InstanceField[_] => field }
+      .filter(_.flags.collect { case p : Private[_] => p}.nonEmpty)
   }
 
   private def noop(implicit o: Origin): Statement[Post] = Block[Post](Seq())
@@ -113,10 +108,15 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       WritePerm(),
     )
 
-  private def leakable(obj: Expr[Post])(implicit o: Origin): Expr[Post] = {
+  private def leakable(obj: Expr[Post])(implicit o: Origin): Expr[Post] =
     // leakable read and write permissions can be used interchangeably
     Value(PredicateLocation(PredicateApply(leakablePredRef, Seq(obj))))
-  }
+
+  private def curPermHidden(obj: Expr[Post])(implicit o:Origin): Expr[Post] =
+    CurPerm(PredicateLocation(PredicateApply(hiddenPredRef, Seq(obj))))
+
+  private def curPermLeakable(obj: Expr[Post])(implicit o:Origin): Expr[Post] =
+    CurPerm(PredicateLocation(PredicateApply(leakablePredRef, Seq(obj))))
 
   private def inhaleAllLowAndLeakable(variables: Seq[Variable[Post]])(implicit o : Origin) : Seq[Statement[Post]] =
     variables.filter(arg => noPrimitiveType(arg.t))
@@ -128,6 +128,19 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       arg.o.getPreferredNameOrElse(Seq("unknown_var"))
     ))
   }
+
+  private def declareNewVar[G](field: InstanceField[G]): Variable[G] = {
+    new Variable(field.t)(origin(
+      field.o.getPreferredNameOrElse(Seq("unknown_var"))
+    ))
+  }
+
+
+  private def ifLeakableElse(conditionVariable: Local[Post], ifBody: Statement[Post], elseBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
+    Branch(Seq(
+      (Greater(curPermLeakable(conditionVariable), IntegerValue(0)), ifBody),
+      (tt, elseBody)
+    ))
 
   private def emptyAccountedPredicate(implicit o:Origin) : AccountedPredicate[Post] = getAccountedPredicate(Seq(tt[Post]))
 
@@ -199,13 +212,8 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           ))
         }
       case mInv : InvokeMethod[_] =>
-        val cls: ByReferenceClass[Pre] = mInv.obj.t match { //TODO track RuntimeClass
-          case tClass: TByReferenceClass[Pre] => tClass.cls.decl match {
-            case clazz: ByReferenceClass[_] => clazz
-            case _ => throw SIFUCUnsupported(mInv, "Only supports MethodInvocation on ByReferenceClasses.")
-          }
-          case _ => throw SIFUCUnsupported(mInv, "Only supports MethodInvocation on ByReferenceClasses.")
-        }
+        //TODO track RuntimeClass
+        val cls: ByReferenceClass[Pre] = getClsFromType(mInv.obj.t)
         if (cls.isUnverified) {
           if (mInv.outArgs.size > 1) {
             throw SIFUCUnsupported(mInv, "Too many outArgs for MethodInvocation.")
@@ -239,9 +247,91 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         Assert(Leakable[Post](newObj))(InsufficientPermissionDuringLeak(
           l
         )); // TODO
+      // Field reads
+      case assign @ Assign(resVar @ Local(_), Deref(receiver @ Local(_), fieldRef)) =>
+        val y: Local[Post]  = dispatch(resVar).asInstanceOf[Local[Post]]
+        val x: Local[Post] = dispatch(receiver).asInstanceOf[Local[Post]]
+        // here the static type is desirable
+        val cls: ByReferenceClass[Pre] = getClsFromType(receiver.t)
+        val isPrivate = fieldRef.decl.flags.exists{
+          case Private() => true
+          case _ => false
+        }
+        val isModifiable = fieldRef.decl.flags.exists{
+          case Modifiable() => true
+          case _ => false
+        }
+        if(isPrivate && isModifiable){
+          val modFields: Seq[InstanceField[Pre]] = getAllModifiableFields(cls)
+          val modVars = modFields.map(declareNewVar[Pre])
+          val modVarsPost: Seq[Variable[Post]] = modVars.map(variables.dispatch)
+          val modFieldSub = Substitute(
+              (modFields
+              .map(f =>
+                Deref(ThisObject(cls.ref.asInstanceOf[Ref[Pre, Class[Pre]]]), f.ref.asInstanceOf[Ref[Pre, InstanceField[Pre]]])(PanicBlame("sub node")))
+                zip
+                modVars.map(v => Local[Pre](v.ref)))
+              .toMap[Expr[Pre], Expr[Pre]]
+              +
+                (ThisObject(cls.ref.asInstanceOf[Ref[Pre, Class[Pre]]]) -> receiver)
+          )
+          val inv = modFieldSub.dispatch(cls.ucInvariant)
+          val (unaryInv, relInv) = splitExprUnaryRel(inv)
+          Block(Seq(
+            Assert(
+              Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                Greater(curPermHidden(x), IntegerValue(0)))
+            )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+            ifLeakableElse(x,
+              ifBody = Scope(modVarsPost, Block(Seq[Statement[Post]](
+                Inhale(dispatch(unaryInv)),
+                Assume(Implies(Low(x), dispatch(relInv))),
+                Assign(y, Local[Post](modVarsPost(modFields.indexOf(fieldRef.decl)).ref))(PanicBlame("assign local <- local should never fail")),
+              ))),
+              elseBody = assign.rewriteDefault())
+          ))
+        } else if(isPrivate && !isModifiable){
+          //TODO
+          assign.rewriteDefault()
+        } else {
+          if(isModifiable){
+            logger.warn(s"Field $fieldRef is public, no need to annotate it with 'modifiable'.")
+          }
+          //TODO public
+          assign.rewriteDefault()
+        }
+
+      //Field writes
+      case assign @ Assign(Deref(Local(x), fieldRef), Local(y)) =>
+        assign.rewriteDefault()
+
+      case b @ Branch(branches) =>
+        b.rewriteDefault()
       case other => other.rewriteDefault()
     }
   }
+
+  private def splitExprUnaryRel(exp: Expr[Pre]) = {
+    val unaryInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
+      case LowEvent() => true
+      case Low(_) => true
+      case _ => false
+    }, tt).dispatch(exp)
+    val relInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
+      case LowEvent() => false
+      case Low(_) => false
+      case _ => true
+    }, tt).dispatch(exp)
+    (unaryInv, relInv)
+  }
+
+  private def getClsFromType[G](t: Type[G]): ByReferenceClass[G] = t match {
+      case tClass: TByReferenceClass[_] => tClass.cls.decl match {
+        case clazz: ByReferenceClass[_] => clazz
+        case _ => throw SIFUCUnsupported(t, "Only supports ByReferenceClasses.")
+      }
+      case _ => throw SIFUCUnsupported(t, "Only supports ByReferenceClasses.")
+    }
 
   override def dispatch(decl: Declaration[Pre]): Unit = {
     implicit val o: Origin = decl.o

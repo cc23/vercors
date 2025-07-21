@@ -158,6 +158,17 @@ case class AssignFieldFailed(node: SilverFieldAssign[_])
     s"Insufficient permission for assignment `$source`."
 }
 
+case class AssignFailedSIFUC(node: Assign[_], reason: String)
+  extends AssignFailed with NodeVerificationFailure {
+  override def code: String = "assignFailedSIFUC"
+  override def descInContext: String =
+    s"Assignment violates SIF. Reason: $reason"
+  override def inlineDescWithSource(source: String): String =
+    s"Assignment `$source` violates SIF. Reason: $reason."
+
+}
+
+
 case class CopyClassFailed(node: Node[_], clazz: ByValueClass[_], field: String)
     extends PointerDerefError with NodeVerificationFailure {
   override def code: String = "copyClassFailed"
