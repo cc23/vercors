@@ -142,6 +142,10 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       (tt, elseBody)
     ))
 
+  private def ifLeakable(conditionVariable: Local[Post], ifBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
+    Branch(Seq((Greater(curPermLeakable(conditionVariable), IntegerValue(0)), ifBody)))
+
+
   private def emptyAccountedPredicate(implicit o:Origin) : AccountedPredicate[Post] = getAccountedPredicate(Seq(tt[Post]))
 
   private def getAccountedPredicate(exp: Seq[Expr[Post]])(implicit o: Origin): AccountedPredicate[Post] =
@@ -261,7 +265,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           case Modifiable() => true
           case _ => false
         }
-        if(isPrivate && isModifiable){
+        if(isPrivate){
           val modFields: Seq[InstanceField[Pre]] = getAllModifiableFields(cls)
           val modVars = modFields.map(declareNewVar[Pre])
           val modVarsPost: Seq[Variable[Post]] = modVars.map(variables.dispatch)
@@ -277,22 +281,34 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           )
           val inv = modFieldSub.dispatch(cls.ucInvariant)
           val (unaryInv, relInv) = splitExprUnaryRel(inv)
-          Block(Seq(
-            Assert(
-              Or(Greater(curPermLeakable(x), IntegerValue(0)),
-                Greater(curPermHidden(x), IntegerValue(0)))
-            )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
-            ifLeakableElse(x,
-              ifBody = Scope(modVarsPost, Block(Seq[Statement[Post]](
-                Inhale(dispatch(unaryInv)),
-                Assume(Implies(Low(x), dispatch(relInv))),
-                Assign(y, Local[Post](modVarsPost(modFields.indexOf(fieldRef.decl)).ref))(PanicBlame("assign local <- local should never fail")),
-              ))),
-              elseBody = assign.rewriteDefault())
-          ))
-        } else if(isPrivate && !isModifiable){
-          //TODO
-          assign.rewriteDefault()
+          if(isModifiable){
+            Block(Seq(
+              Assert(
+                Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                  Greater(curPermHidden(x), IntegerValue(0)))
+              )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+              ifLeakableElse(x,
+                ifBody = Scope(modVarsPost, Block(Seq[Statement[Post]](
+                  Inhale(dispatch(unaryInv)),
+                  Assume(Implies(Low(x), dispatch(relInv))),
+                  Assign(y, Local[Post](modVarsPost(modFields.indexOf(fieldRef.decl)).ref))(PanicBlame("assign local <- local should never fail")),
+                ))),
+                elseBody = assign.rewriteDefault())
+            ))
+          } else {
+            Block(Seq(
+              Assert(
+                Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                  Greater(curPermHidden(x), IntegerValue(0)))
+              )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+              ifLeakable(x,
+                ifBody = Scope(modVarsPost, Block(Seq[Statement[Post]](
+                  Inhale(dispatch(unaryInv)),
+                  Assume(Implies(Low(x), dispatch(relInv))),
+                )))),
+              assign.rewriteDefault(),
+            ))
+          }
         } else {
           if(isModifiable){
             logger.warn(s"Field $fieldRef is public, no need to annotate it with 'modifiable'.")
