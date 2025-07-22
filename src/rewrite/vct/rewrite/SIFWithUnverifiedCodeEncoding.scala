@@ -323,8 +323,10 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
                 Greater(curPermHidden(x), IntegerValue(0)))
             )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
             ifLeakableElse(x,
-              ifBody = Scope(Seq(tempVar), Block(Seq[Statement[Post]](
-                Inhale(leakable(temp)),
+              ifBody = Scope(Seq(tempVar), Block(
+                if(noPrimitiveType(temp.t)) Seq(Inhale(leakable(temp))) else Seq()
+                ++
+                Seq[Statement[Post]](
                 Assume(Implies(Low(x), Low(temp))),
                 Assign(y, temp)(PanicBlame("assign local <- local should never fail")),
               ))),
