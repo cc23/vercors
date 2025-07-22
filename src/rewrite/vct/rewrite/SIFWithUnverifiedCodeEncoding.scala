@@ -27,12 +27,6 @@ case class SIFUCUnsupported(node: Node[_], message : String) extends SystemError
     node.o.messageInContext(message)
 }
 
-case class InsufficientPermissionDuringLeak(leak: Leak[_])
-    extends Blame[AssertFailed] {
-  override def blame(error: AssertFailed): Unit =
-    leak.blame.blame(LeakInsufficientPermission(leak, error.failure))
-}
-
 case class SecondMethodVerificationFailed(app: InstanceMethod[_])
   extends Blame[CallableFailure] {
 
@@ -82,14 +76,54 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     def dispatch(t : Type[Pre]) : Type[Pre] = sub.dispatch(t)
   }
 
-  private def noPrimitiveType(t: Type[Post]): Boolean =
-    !t.isInstanceOf[PrimitiveType[Post]]
+  private def noPrimitiveType[G](t: Type[G]): Boolean =
+    !t.isInstanceOf[PrimitiveType[G]]
 
-  private def encodeLeak(
-                          obj: Expr[Post]
-                        )(implicit o: Origin): Statement[Post] = {
-    // TODO
-    Inhale(leakable(obj))
+  private def inhaleNullFieldsLeakable(clsPre: ByReferenceClass[Pre], fieldAccess: InstanceField[Pre] => Expr[Post])(implicit o : Origin)
+  : Seq[Statement[Post]] = {
+    clsPre.decls.collect { case field: InstanceField[_] => field }
+      .filter(f => noPrimitiveType(f.t))
+      .map[Statement[Post]](f => Branch(Seq(Eq(fieldAccess(f), Null()) -> Inhale(leakable(fieldAccess(f))))))
+  }
+
+  private def encodeLeak(objPre: Expr[Pre], blameWithMsg: String => Blame[VerificationFailure])(implicit o: Origin): Statement[Post] = {
+    val obj = dispatch(objPre)
+    val cls: ByReferenceClass[Pre] = getClsFromType(objPre.t)
+    val inv: Expr[Post] = dispatch(
+      Substitute(Map[Expr[Pre], Expr[Pre]](ThisObject(cls.ref.asInstanceOf[Ref[Pre, Class[Pre]]]) -> objPre))
+        .dispatch(cls.ucInvariant)
+    )
+    Block(Seq[Statement[Post]](
+      Assert(
+        Or(Greater(curPermLeakable(obj), IntegerValue(0)),
+          Greater(curPermHidden(obj), IntegerValue(0)))
+      )(blameWithMsg(s"$obj should either be leakable or hidden")),
+      Branch(Seq((Eq(curPermLeakable(obj), IntegerValue(0)),
+        Block(Seq[Statement[Post]](
+          Exhale(hiddenWrite(obj))(blameWithMsg(s"Might not have write perm to hidden($obj) during leak")),
+          Inhale(leakable(obj)),
+          Exhale(inv)(blameWithMsg(s"failed during exhaling inv: $inv")),
+          Assert(Low(obj))(blameWithMsg(s"$obj might not be low")),
+        )
+          ++
+          getAllModifiableFields(cls)
+            .map[Statement[Post]](f => Exhale(Perm(FieldLocation[Post](obj, succ(f)), WritePerm()))
+            (blameWithMsg(s"missing write perm for field: $f")))
+          ++
+          getAllNonPrivateFields(cls)
+            .map(f => {
+              val fDeref = Deref[Post](obj, succ(f))(blameWithMsg(s"missing perm to read field $f"))
+              Block(
+                Assert(Low(fDeref))(blameWithMsg(s"field might not be low: $f"))
+                  +:
+                  (if(noPrimitiveType(f.t)) Seq(Assert(leakable(fDeref))(blameWithMsg(s"field might not be leakable: $f"))) else Seq())
+                  :+
+                  Exhale(Perm(FieldLocation[Post](obj, succ(f)), WritePerm()))(blameWithMsg(s"missing write perm for field: $f"))
+              )
+            })
+        ))
+      )
+      )))
   }
 
   private def getAllModifiableFields[G](cls : ByReferenceClass[G]): Seq[InstanceField[G]] = {
@@ -97,6 +131,12 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       .filter(_.flags.collect { case p : Private[_] => p}.nonEmpty)
       .filter(_.flags.collect { case p : Modifiable[_] => p}.nonEmpty)
   }
+
+  private def getAllNonPrivateFields[G](cls : ByReferenceClass[G]): Seq[InstanceField[G]] = {
+    cls.decls.collect { case field: InstanceField[_] => field }
+      .filter(_.flags.collect { case p : Private[_] => p}.isEmpty)
+  }
+
 
   private def noop(implicit o: Origin): Statement[Post] = Block[Post](Seq())
 
@@ -145,7 +185,6 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
 
   private def ifLeakable(conditionVariable: Local[Post], ifBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
     Branch(Seq((Greater(curPermLeakable(conditionVariable), IntegerValue(0)), ifBody)))
-
 
   private def emptyAccountedPredicate(implicit o:Origin) : AccountedPredicate[Post] = getAccountedPredicate(Seq(tt[Post]))
 
@@ -247,11 +286,6 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         } else{
           mInv.rewriteDefault()
         }
-      case l @ Leak(obj) =>
-        val newObj = dispatch(obj)
-        Assert(Leakable[Post](newObj))(InsufficientPermissionDuringLeak(
-          l
-        )); // TODO
       // Field reads
       case assign @ Assign(resVar @ Local(_), Deref(receiver @ Local(_), fieldRef)) =>
         val y: Local[Post]  = dispatch(resVar).asInstanceOf[Local[Post]]
@@ -333,7 +367,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               elseBody = assign.rewriteDefault())
           ))
         }
-
+      case l @ Leak(objPre) => encodeLeak(objPre, msg => err => l.blame.blame(LeakFailed(l, msg)))
       //Field writes
       case assign @ Assign(Deref(Local(x), fieldRef), Local(y)) =>
         assign.rewriteDefault()
@@ -344,7 +378,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     }
   }
 
-  private def splitExprUnaryRel(exp: Expr[Pre]) = {
+  private def splitExprUnaryRel(exp: Expr[Pre]): (Expr[Pre], Expr[Pre]) = {
     val unaryInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
       case LowEvent() => true
       case Low(_) => true
@@ -381,8 +415,11 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         allScopes.anySucceed(decl, predRewritten)
 
       case cons: Constructor[Pre] =>
-        val cls: Ref[Post, Class[Post]] = succ(cons.cls.decl)
+        val clsPre: ByReferenceClass[Pre] = cons.cls.decl.asInstanceOf[ByReferenceClass[Pre]]
+        val cls: Ref[Post, Class[Post]] = succ(clsPre)
         val contractH = dispatch(cons.contract)
+        val derefField: InstanceField[Pre] => Expr[Post] =
+          f => Deref[Post](ThisObject(cls), succ(f))(_ => cons.blame.blame(SecondVerificationConstructorLeakFail(cons, s"missing perm for field $f")))
 
         cons.rewrite(
             body = cons.body.map(stat => Block[Post](
@@ -390,7 +427,10 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
                 Inhale(hiddenWrite(ThisObject(cls))),
                 Assume(Low(ThisObject(cls))),
                 dispatch(stat),
-              ))),
+              )
+                ++
+                inhaleNullFieldsLeakable(clsPre, derefField)
+            )),
             contract = contractH.copy(ensures =
               SplitAccountedPredicate(
                 contractH.ensures,
@@ -402,6 +442,9 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         if(!cons.isPrivate){
           val argSub = new ArgSubstitute(cons.args, cons.outArgs, cons.typeArgs)
           val newArgs = variables.dispatch(argSub.newArgs)
+          val leakThis = encodeLeak(ThisObject(clsPre.ref),
+              msg => err => cons.blame.blame(SecondVerificationConstructorLeakFail(cons, msg)))
+
           classDeclarations.declare(
             new Constructor(
               cls,
@@ -416,8 +459,10 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
                       Assume(Low(ThisObject(cls))),
                       Assume(LowEvent()),
                       dispatch(argSub.dispatch(stat)),
-                      encodeLeak(ThisObject(cls)),
                     )
+                  ++
+                  inhaleNullFieldsLeakable(clsPre, derefField)
+                  :+ leakThis
                 )
               }
               ),
@@ -498,7 +543,4 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       case other => allScopes.anySucceed(decl, decl.rewriteDefault())
     }
   }
-
-
-
 }

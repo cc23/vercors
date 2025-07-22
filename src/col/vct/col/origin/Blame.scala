@@ -165,9 +165,7 @@ case class AssignFailedSIFUC(node: Assign[_], reason: String)
     s"Assignment violates SIF. Reason: $reason"
   override def inlineDescWithSource(source: String): String =
     s"Assignment `$source` violates SIF. Reason: $reason."
-
 }
-
 
 case class CopyClassFailed(node: Node[_], clazz: ByValueClass[_], field: String)
     extends PointerDerefError with NodeVerificationFailure {
@@ -403,6 +401,21 @@ case class SecondVerificationPostFailed(node: ContractApplicable[_], failure: Co
 
   override def inlineDesc: String =
     s"Result of public member '${node.o.inlineContextText}' might not be $lowOrLeakable, when called from UC."
+}
+
+case class SecondVerificationConstructorLeakFail(node: Constructor[_], reason: String)
+  extends CallableFailure  {
+  override def position: String = node.o.shortPositionText
+
+  override def code: String = s"2ndVerificationLeakFailed"
+
+  override def desc: String =
+    Message.messagesInContext(
+      (node.o, s"Leak at the end of the constructor failed. Reason: $reason"),
+    )
+
+  override def inlineDesc: String =
+    s"Leak at the end of constructor '${node.o.inlineContextText}' failed. Reason: $reason"
 }
 
 sealed trait TerminationMeasureFailed extends ContractedFailure
@@ -1227,21 +1240,20 @@ case class LockTokenNotHeld(node: Unlock[_], failure: ContractFailure)
     s"`$node` may fail, since the `held` resource may not be exhaled here, since $failure."
 }
 sealed trait LeakFailure extends VerificationFailure
-case class LeakInvariantFailed(node: Leak[_], failure: ContractFailure)
-  extends LeakFailure with WithContractFailure {
-  override def baseCode: String = "leakInvFailed"
-  override def descInContext: String =
-    "The invariant failed during leak operation here, since"
-  override def inlineDescWithSource(node: String, failure: String): String =
-    s"`$node` may fail, since invariant may not hold, since $failure."
-}
-case class LeakInsufficientPermission(node: Leak[_], failure: ContractFailure)
-  extends LeakFailure with WithContractFailure {
-  override def baseCode: String = "leakInsuffPerm"
-  override def descInContext: String =
-    "Leak operation failed here, since"
-  override def inlineDescWithSource(node: String, failure: String): String =
-    s"`$node` may fail, since $failure."
+
+case class LeakFailed(node: Leak[_], reason: String)
+  extends LeakFailure {
+  override def position: String = node.o.shortPositionText
+
+  override def code: String = "leakFailed"
+
+  override def desc: String =
+    Message.messagesInContext(
+      (node.o, s"Leak operation failed. Reason: $reason"),
+    )
+
+  override def inlineDesc: String =
+    s"Leak operation '${node.o.inlineContextText}' failed. Reason: $reason"
 }
 
 sealed trait ConstructorFailure extends VerificationFailure
