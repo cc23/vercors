@@ -369,8 +369,52 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         }
       case l @ Leak(objPre) => encodeLeak(objPre, msg => err => l.blame.blame(LeakFailed(l, msg)))
       //Field writes
-      case assign @ Assign(Deref(Local(x), fieldRef), Local(y)) =>
-        assign.rewriteDefault()
+      case assign @ Assign(Deref(receiver @ Local(_), fieldRef), newVal) =>
+        val y: Expr[Post]  = dispatch(newVal)
+        val x: Local[Post] = dispatch(receiver).asInstanceOf[Local[Post]]
+        // here the static type is desirable
+        val cls: ByReferenceClass[Pre] = getClsFromType(receiver.t)
+        val isPrivate = fieldRef.decl.flags.exists{
+          case Private() => true
+          case _ => false
+        }
+        val isModifiable = fieldRef.decl.flags.exists{
+          case Modifiable() => true
+          case _ => false
+        }
+        if (isPrivate) {
+          if (isModifiable) {
+            //TODO
+            assign.rewriteDefault()
+          } else {
+            //TODO
+            assign.rewriteDefault()
+          }
+        } else {
+          if (isModifiable) {
+            logger.warn(s"Field $fieldRef is public, no need to annotate it with 'modifiable'.")
+          }
+          // public / protected / package-private
+          Block(Seq(
+            Assert(
+              Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                Greater(curPermHidden(x), IntegerValue(0)))
+            )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+            ifLeakableElse(x,
+              ifBody =Block(
+                if(noPrimitiveType(y.t)) Seq(Assert(leakable(y))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$y must be leakable."))))
+                else Seq()
+                  ++
+                Seq[Statement[Post]](
+                  Assert(LowEvent())(_ => assign.blame.blame(AssignFailedSIFUC(assign, "This assignment must be lowEvent."))),
+                  Assert(Low(x))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"The receiver $x should be low."))),
+                  Assert(Low(y))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$y should be low."))),
+                )
+              ),
+              elseBody = assign.rewriteDefault())
+          ))
+
+        }
 
       case b @ Branch(branches) =>
         b.rewriteDefault()
