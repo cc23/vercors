@@ -424,27 +424,27 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               .toSeq
           )
 
-          if (isModifiable) {
-            Block(Seq(
-              Assert(
-                Or(Greater(curPermLeakable(x), IntegerValue(0)),
-                  Greater(curPermHidden(x), IntegerValue(0)))
-              )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
-              ifLeakableElse(x,
-                ifBody = Scope(modVarsNewPost ++ modVarsOldPost, Block(Seq(
-                    Inhale(Implies(And(LowEvent(), Low(x)), subbedInv)),
-                    Inhale(Implies(Not(And(LowEvent(), Low(x))), splitInv)),
-                    Assign(Local[Post](modVarsNewPost(modFields.indexOf(fieldRef.decl)).ref), y)(PanicBlame("assign local <- local should never fail")),
-                    Assert(Implies(And(LowEvent(), Low(x)), subbedInv))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"Invariant: $subbedInv might not hold after assignment"))),
-                    Assert(Implies(Not(And(LowEvent(), Low(x))), splitInv))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"Invariant: $splitInv might not hold after assignment"))),
-                  ))
-                ),
-                elseBody = assign.rewriteDefault())
-            ))
-          } else {
-            //TODO
+          val leakableAssign = if (isModifiable)
+            Assign(Local[Post](modVarsNewPost(modFields.indexOf(fieldRef.decl)).ref), y)(PanicBlame("assign local <- local should never fail"))
+          else
             assign.rewriteDefault()
-          }
+
+          Block(Seq(
+            Assert(
+              Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                Greater(curPermHidden(x), IntegerValue(0)))
+            )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+            ifLeakableElse(x,
+              ifBody = Scope(modVarsNewPost ++ modVarsOldPost, Block(Seq(
+                Inhale(Implies(And(LowEvent(), Low(x)), subbedInv)),
+                Inhale(Implies(Not(And(LowEvent(), Low(x))), splitInv)),
+                leakableAssign,
+                Assert(Implies(And(LowEvent(), Low(x)), subbedInv))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"Invariant: $subbedInv might not hold after assignment"))),
+                Assert(Implies(Not(And(LowEvent(), Low(x))), splitInv))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"Invariant: $splitInv might not hold after assignment"))),
+              ))
+              ),
+              elseBody = assign.rewriteDefault())
+          ))
         } else {
           if (isModifiable) {
             logger.warn(s"Field $fieldRef is public, no need to annotate it with 'modifiable'.")
