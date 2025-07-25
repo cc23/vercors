@@ -943,6 +943,9 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
       case v @ Value(PredicateLocation(inv: InstancePredicateApply[Pre])) =>
         implicit val o: Origin = e.o
         Star[Post](v.rewrite(), dispatch(inv.obj) !== Null())
+      case s @ SplitInvariant(_, _, r) => s.rewrite(
+          repl = r.map(tup => (byRefFieldSucc.ref(tup._1.decl.asInstanceOf[InstanceField[Pre]]), dispatch(tup._2), dispatch(tup._3)))
+      )
       case _ => super.dispatch(e)
     }
 

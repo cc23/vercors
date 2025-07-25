@@ -3,6 +3,7 @@ package vct.rewrite
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
 import vct.col.ast.{InstanceField, _}
+import vct.col.origin.Name.Preferred
 import vct.col.origin._
 import vct.col.ref.Ref
 import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
@@ -176,6 +177,11 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     ))
   }
 
+  private def declareNewVar[G](field: InstanceField[G], nameAppend: String): Variable[G] = {
+    new Variable(field.t)(origin(
+      Preferred(Seq(field.o.getPreferredNameOrElse(Seq("unknown")).snake, nameAppend))
+    ))
+  }
 
   private def ifLeakableElse(conditionVariable: Local[Post], ifBody: Statement[Post], elseBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
     Branch(Seq(
@@ -185,6 +191,12 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
 
   private def ifLeakable(conditionVariable: Local[Post], ifBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
     Branch(Seq((Greater(curPermLeakable(conditionVariable), IntegerValue(0)), ifBody)))
+
+  private def ifLowEventLowRecvElse(receiver: Local[Post], ifBody: Statement[Post], elseBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
+    Branch(Seq(
+      (And(LowEvent(), Low(receiver)), ifBody),
+      (tt, elseBody)
+    ))
 
   private def emptyAccountedPredicate(implicit o:Origin) : AccountedPredicate[Post] = getAccountedPredicate(Seq(tt[Post]))
 
@@ -383,9 +395,52 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           case _ => false
         }
         if (isPrivate) {
+          val modFields: Seq[InstanceField[Pre]] = getAllModifiableFields(cls)
+          val modVarsNew: Seq[Variable[Pre]] = modFields
+            .map(declareNewVar(_, "new"))
+          val modVarsOld: Seq[Variable[Pre]] = modFields
+            .map(declareNewVar(_, "old"))
+          val modVarsNewPost = modVarsNew.map(variables.dispatch)
+          val modVarsOldPost = modVarsOld.map(variables.dispatch)
+          val modFieldSub = Substitute(
+            (modFields
+              .map(f =>
+                Deref(ThisObject(cls.ref.asInstanceOf[Ref[Pre, Class[Pre]]]), f.ref.asInstanceOf[Ref[Pre, InstanceField[Pre]]])(PanicBlame("sub node")))
+              zip
+              modVarsNew.map(v => Local[Pre](v.ref)))
+              .toMap[Expr[Pre], Expr[Pre]]
+              +
+              (ThisObject(cls.ref.asInstanceOf[Ref[Pre, Class[Pre]]]) -> receiver)
+          )
+          val subbedInv: Expr[Post] = dispatch(modFieldSub.dispatch(cls.ucInvariant))
+
+          val splitInv = SplitInvariant(
+            dispatch(cls.ucInvariant),
+            x,
+            modFields
+              .map(m => succ[Declaration[Post]](m))
+              .lazyZip(modVarsNewPost.map(v => Local[Post](v.ref)))
+              .lazyZip(modVarsOldPost.map(v => Local[Post](v.ref)))
+              .toSeq
+          )
+
           if (isModifiable) {
-            //TODO
-            assign.rewriteDefault()
+            Block(Seq(
+              Assert(
+                Or(Greater(curPermLeakable(x), IntegerValue(0)),
+                  Greater(curPermHidden(x), IntegerValue(0)))
+              )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
+              ifLeakableElse(x,
+                ifBody = Scope(modVarsNewPost ++ modVarsOldPost, Block(Seq(
+                    Inhale(Implies(And(LowEvent(), Low(x)), subbedInv)),
+                    Inhale(Implies(Not(And(LowEvent(), Low(x))), splitInv)),
+                    Assign(Local[Post](modVarsNewPost(modFields.indexOf(fieldRef.decl)).ref), y)(PanicBlame("assign local <- local should never fail")),
+                    Assert(Implies(And(LowEvent(), Low(x)), subbedInv))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"Invariant: $subbedInv might not hold after assignment"))),
+                    Assert(Implies(Not(And(LowEvent(), Low(x))), splitInv))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"Invariant: $splitInv might not hold after assignment"))),
+                  ))
+                ),
+                elseBody = assign.rewriteDefault())
+            ))
           } else {
             //TODO
             assign.rewriteDefault()

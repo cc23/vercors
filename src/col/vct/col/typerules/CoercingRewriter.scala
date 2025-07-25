@@ -2246,6 +2246,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case LowEvent() => LowEvent()
       case h @ Hidden(expr) => Hidden(expr)
       case l @ Leakable(expr) => Leakable(expr)
+      case si @ SplitInvariant(_,_,_) => si
     }
   }
 

@@ -11,7 +11,7 @@ import viper.api.transform.ColToSilver.{hiddenPred, leakablePred}
 import viper.silver.ast.{Info, LocalVarDecl, Predicate, TypeVar}
 import viper.silver.plugin.standard.termination.{DecreasesClause, DecreasesTuple, DecreasesWildcard}
 import viper.silver.{ast => silver}
-import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFExceptionHandler, SIFLowEventExp, SIFLowExp, SIFRaiseStmt, SIFReturnStmt, SIFTryCatchStmt}
+import viper.silver.sif.{SIFBreakStmt, SIFContinueStmt, SIFDeclassifyStmt, SIFExceptionHandler, SIFLowEventExp, SIFLowExp, SIFRaiseStmt, SIFReturnStmt, SIFSplitInvariant, SIFTryCatchStmt}
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -767,6 +767,15 @@ case class ColToSilver(program: col.Program[_]) {
 
       case col.Low(expr) => SIFLowExp(exp(expr))(pos = pos(e), info = expInfo(e))
       case col.LowEvent() => SIFLowEventExp()(pos = pos(e), info = expInfo(e))
+      case col.SplitInvariant(inv, recv, repl) =>
+        val (replFields, replNew, replOld) = repl.unzip3
+        SIFSplitInvariant(
+        exp(inv),
+        exp(recv),
+          replFields.map(f => fields(f.decl.asInstanceOf[col.SilverField[_]])),
+          replNew.map(exp),
+          replOld.map(exp),
+      )(pos = pos(e), info = expInfo(e))
       case other => ??(other)
     }
 
