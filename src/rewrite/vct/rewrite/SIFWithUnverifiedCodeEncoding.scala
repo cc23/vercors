@@ -183,13 +183,13 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     ))
   }
 
-  private def ifLeakableElse(conditionVariable: Local[Post], ifBody: Statement[Post], elseBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
+  private def ifLeakableElse(conditionVariable: Expr[Post], ifBody: Statement[Post], elseBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
     Branch(Seq(
       (Greater(curPermLeakable(conditionVariable), IntegerValue(0)), ifBody),
       (tt, elseBody)
     ))
 
-  private def ifLeakable(conditionVariable: Local[Post], ifBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
+  private def ifLeakable(conditionVariable: Expr[Post], ifBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
     Branch(Seq((Greater(curPermLeakable(conditionVariable), IntegerValue(0)), ifBody)))
 
   private def ifLowEventLowRecvElse(receiver: Local[Post], ifBody: Statement[Post], elseBody: Statement[Post])(implicit o:Origin) : Statement[Post] =
@@ -299,9 +299,12 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           mInv.rewriteDefault()
         }
       // Field reads
-      case assign @ Assign(resVar @ Local(_), Deref(receiver @ Local(_), fieldRef)) =>
+      case assign @ Assign(resVar @ Local(_), Deref(receiver, fieldRef)) =>
+        if(!(receiver.isInstanceOf[Local[Pre]] || receiver.isInstanceOf[ThisObject[Pre]])){
+          logger.warn(s"receiver of unexpected type: $receiver")
+        }
         val y: Local[Post]  = dispatch(resVar).asInstanceOf[Local[Post]]
-        val x: Local[Post] = dispatch(receiver).asInstanceOf[Local[Post]]
+        val x: Expr[Post] = dispatch(receiver)
         // here the static type is desirable
         val cls: ByReferenceClass[Pre] = getClsFromType(receiver.t)
         val isPrivate = fieldRef.decl.flags.exists{
@@ -381,9 +384,12 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         }
       case l @ Leak(objPre) => encodeLeak(objPre, msg => err => l.blame.blame(LeakFailed(l, msg)))
       //Field writes
-      case assign @ Assign(Deref(receiver @ Local(_), fieldRef), newVal) =>
+      case assign @ Assign(Deref(receiver, fieldRef), newVal) =>
+        if(!(receiver.isInstanceOf[Local[Pre]] || receiver.isInstanceOf[ThisObject[Pre]])){
+          logger.warn(s"receiver of unexpected type: $receiver")
+        }
         val y: Expr[Post]  = dispatch(newVal)
-        val x: Local[Post] = dispatch(receiver).asInstanceOf[Local[Post]]
+        val x: Expr[Post] = dispatch(receiver)
         // here the static type is desirable
         val cls: ByReferenceClass[Pre] = getClsFromType(receiver.t)
         val isPrivate = fieldRef.decl.flags.exists{
