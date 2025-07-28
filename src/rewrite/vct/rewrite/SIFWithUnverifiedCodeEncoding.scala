@@ -80,11 +80,15 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
   private def noPrimitiveType[G](t: Type[G]): Boolean =
     !t.isInstanceOf[PrimitiveType[G]]
 
-  private def inhaleNullFieldsLeakable(clsPre: ByReferenceClass[Pre], fieldAccess: InstanceField[Pre] => Expr[Post])(implicit o : Origin)
+  private def inhaleNullFieldsLeakableHidden(clsPre: ByReferenceClass[Pre], fieldAccess: InstanceField[Pre] => Expr[Post])(implicit o : Origin)
   : Seq[Statement[Post]] = {
     clsPre.decls.collect { case field: InstanceField[_] => field }
       .filter(f => noPrimitiveType(f.t))
-      .map[Statement[Post]](f => Branch(Seq(Eq(fieldAccess(f), Null()) -> Inhale(leakable(fieldAccess(f))))))
+      .map[Statement[Post]](f => Branch(Seq(Eq(fieldAccess(f), Null()) ->
+        Block(Seq(
+        Inhale(leakable(fieldAccess(f))),
+          Inhale(hiddenWrite(fieldAccess(f)))
+        )))))
   }
 
   private def encodeLeak(objPre: Expr[Pre], blameWithMsg: String => Blame[VerificationFailure])(implicit o: Origin): Statement[Post] = {
@@ -540,7 +544,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
                 dispatch(stat),
               )
                 ++
-                inhaleNullFieldsLeakable(clsPre, derefField)
+                inhaleNullFieldsLeakableHidden(clsPre, derefField)
             )),
             contract = contractH.copy(ensures =
               SplitAccountedPredicate(
@@ -572,7 +576,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
                       dispatch(argSub.dispatch(stat)),
                     )
                   ++
-                  inhaleNullFieldsLeakable(clsPre, derefField)
+                  inhaleNullFieldsLeakableHidden(clsPre, derefField)
                   :+ leakThis
                 )
               }
