@@ -485,17 +485,23 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
 
   private def splitExprUnaryRel(exp: Expr[Pre]): (Expr[Pre], Expr[Pre]) = {
     val unaryInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
-      case LowEvent() => true
-      case Low(_) => true
+      case LowEvent() | Low(_) => true
       case _ => false
-    }, tt).dispatch(exp)
+    }, (_:Expr[Pre]) => tt[Pre]).dispatch(exp)
     val relInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
-      case LowEvent() => false
-      case Low(_) => false
-      case _ => true
-    }, tt).dispatch(exp)
+      case LowEvent() | Low(_) => true
+      case _ => isUnary(e)
+    }, (exp: Expr[Pre]) => exp match{
+      case LowEvent() | Low(_) => exp
+      case _ => tt[Pre]
+    }).dispatch(exp)
     (unaryInv, relInv)
   }
+
+  private def isUnary(e: Expr[Pre]) : Boolean = e.collect {
+    case LowEvent() => true
+    case Low(_) => true
+  }.isEmpty
 
   private def getClsFromType[G](t: Type[G]): ByReferenceClass[G] = t match {
       case tClass: TByReferenceClass[_] => tClass.cls.decl match {

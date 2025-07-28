@@ -3,11 +3,11 @@ package vct.col.util
 import vct.col.ast._
 import vct.col.rewrite.NonLatchingRewriter
 
-/** Apply a substitution to expressions depending on whether they satisfy a predicate
+/** Apply a substitution function to expressions depending on whether they satisfy a predicate
   */
 case class PredicateExpSubstitute[G](
     predicate: Expr[G] => Boolean,
-    subExp: Expr[G]
+    subExp: Expr[G] => Expr[G]
 ) extends NonLatchingRewriter[G, G] {
 
   case class SuccOrIdentity() extends SuccessorsProviderTrafo[G, G](allScopes) {
@@ -21,7 +21,7 @@ case class PredicateExpSubstitute[G](
 
   override def dispatch(e: Expr[G]): Expr[G] =
     e match {
-      case expr if predicate(expr) => subExp
+      case expr if predicate(expr) => subExp(expr)
       case other => other.rewriteDefault()
     }
 
