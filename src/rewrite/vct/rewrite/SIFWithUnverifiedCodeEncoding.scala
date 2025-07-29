@@ -492,13 +492,23 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       case LowEvent() | Low(_) => true
       case _ => false
     }, (_:Expr[Pre]) => tt[Pre]).dispatch(exp)
+
+    def starToAnd(exp: Expr[Pre]): Expr[Pre] = exp match {
+      case star @ Star(_,_) => And(starToAnd(star.left), starToAnd(star.right))(star.o)
+      case _ => exp
+    }
+
     val relInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
-      case LowEvent() | Low(_) => true
-      case _ => isUnary(e)
-    }, (exp: Expr[Pre]) => exp match{
-      case LowEvent() | Low(_) => exp
-      case _ => tt[Pre]
-    }).dispatch(exp)
+      case Star(_, _) => true
+      case _ => false
+    }, starToAnd).dispatch(
+      PredicateExpSubstitute((e: Expr[Pre]) => e match {
+        case LowEvent() | Low(_) => true
+        case _ => isUnary(e)
+      }, (exp: Expr[Pre]) => exp match {
+        case LowEvent() | Low(_) => exp
+        case _ => tt[Pre]
+      }).dispatch(exp))
     (unaryInv, relInv)
   }
 
