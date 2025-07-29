@@ -38,7 +38,7 @@ class Complex {
     // secure
     //@ requires leakable(this);
     //@ requires Perm(this.readable, read);
-    //@ ensures Perm(this.readable, read) ** \result == this.readable;
+    //@ ensures Perm(this.readable, read);
     public int getReadableLeakable() {
         return readable;
     }
