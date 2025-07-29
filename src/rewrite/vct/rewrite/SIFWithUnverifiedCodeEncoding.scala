@@ -121,7 +121,8 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               Block(
                 Assert(Low(fDeref))(blameWithMsg(s"field might not be low: $f"))
                   +:
-                  (if(noPrimitiveType(f.t)) Seq(Assert(leakable(fDeref))(blameWithMsg(s"field might not be leakable: $f"))) else Seq())
+                  (if(noPrimitiveType(f.t)) Seq(Assert(leakable(fDeref))(blameWithMsg(s"field might not be leakable: $f")))
+                  else Seq())
                   :+
                   Exhale(Perm(FieldLocation[Post](obj, succ(f)), WritePerm()))(blameWithMsg(s"missing write perm for field: $f"))
               )
@@ -377,7 +378,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
             ifLeakableElse(x,
               ifBody = Scope(Seq(tempVar), Block(
-                if(noPrimitiveType(temp.t)) Seq(Inhale(leakable(temp))) else Seq()
+                (if(noPrimitiveType(temp.t)) Seq(Inhale(leakable(temp))) else Seq())
                 ++
                 Seq[Statement[Post]](
                 Assume(Implies(Low(x), Low(temp))),
@@ -467,8 +468,8 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
             ifLeakableElse(x,
               ifBody =Block(
-                if(noPrimitiveType(y.t)) Seq(Assert(leakable(y))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$y must be leakable."))))
-                else Seq()
+                (if(noPrimitiveType(y.t)) Seq(Assert(leakable(y))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$y must be leakable."))))
+                else Seq())
                   ++
                 Seq[Statement[Post]](
                   Assert(LowEvent())(_ => assign.blame.blame(AssignFailedSIFUC(assign, "This assignment must be lowEvent."))),
