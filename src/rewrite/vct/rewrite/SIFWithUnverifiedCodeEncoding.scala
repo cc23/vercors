@@ -237,6 +237,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     implicit val o: Origin = stat.o
     stat match {
       case invCons : InvokeConstructor[_] =>
+        val insideClass: ByReferenceClass[Pre] = currentClass.top
         if(invCons.outArgs.nonEmpty){
           throw SIFUCUnsupported(invCons, "ConstructorInvocations with outArgs not supported.")
         }
@@ -263,6 +264,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             Seq[Statement[Post]](
               Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
               invCons.rewriteDefault(),
+              Assume(Not(Eq(res, ThisObject[Post](succ(insideClass)))))(invCons.o), // see unverifiedcode/NewObjNotEqToThis.java
               Assume(Low(res))(invCons.o),
               Inhale(leakable(res)),
           ))
@@ -270,6 +272,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           Block(Seq(
             Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
             invCons.rewriteDefault(),
+            Assume(Not(Eq(res, ThisObject[Post](succ(insideClass)))))(invCons.o), // see unverifiedcode/NewObjNotEqToThis.java
           ))
         }
       case mInv : InvokeMethod[_] =>
