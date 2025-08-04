@@ -348,7 +348,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               ifLeakableElse(x,
                 ifBody = Scope(modVarsPost, Block(Seq[Statement[Post]](
                   Inhale(dispatch(unaryInv)),
-                  Assume(Implies(Low(x), dispatch(relInv))),
+                  Inhale(Implies(Low(x), dispatch(relInv))),
                   Assign(y, Local[Post](modVarsPost(modFields.indexOf(fieldRef.decl)).ref))(PanicBlame("assign local <- local should never fail")),
                 ))),
                 elseBody = assign.rewriteDefault())
@@ -362,7 +362,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               ifLeakable(x,
                 ifBody = Scope(modVarsPost, Block(Seq[Statement[Post]](
                   Inhale(dispatch(unaryInv)),
-                  Assume(Implies(Low(x), dispatch(relInv))),
+                  Inhale(Implies(Low(x), dispatch(relInv))),
                 )))),
               assign.rewriteDefault(),
             ))
@@ -496,23 +496,10 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       case LowEvent() | Low(_) => true
       case _ => false
     }, (_:Expr[Pre]) => tt[Pre]).dispatch(exp)
-
-    def starToAnd(exp: Expr[Pre]): Expr[Pre] = exp match {
-      case star @ Star(_,_) => And(starToAnd(star.left), starToAnd(star.right))(star.o)
-      case _ => exp
-    }
-
-    val relInv = PredicateExpSubstitute((e: Expr[Pre]) => e match {
-      case Star(_, _) => true
-      case _ => false
-    }, starToAnd).dispatch(
-      PredicateExpSubstitute((e: Expr[Pre]) => e match {
-        case LowEvent() | Low(_) => true
-        case _ => isUnary(e)
-      }, (exp: Expr[Pre]) => exp match {
-        case LowEvent() | Low(_) => exp
-        case _ => tt[Pre]
-      }).dispatch(exp))
+    // this works even though it is redundant -> in the encoding first unaryInv is always inhaled
+    // and then low(receiver) ==> relInv
+    // in the case of low(receiver) the unary parts of the invariant are inhaled twice (not a problem since all permission amounts can only be wildcard)
+    val relInv = exp
     (unaryInv, relInv)
   }
 
