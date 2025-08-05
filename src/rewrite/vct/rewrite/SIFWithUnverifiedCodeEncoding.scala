@@ -429,7 +429,9 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           val subbedInv: Expr[Post] = dispatch(modFieldSub.dispatch(cls.ucInvariant))
 
           val splitInv = SplitInvariant(
-            dispatch(cls.ucInvariant),
+            dispatch(Substitute(
+              Map[Expr[Pre], Expr[Pre]](ThisObject(cls.ref[Class[Pre]]) -> receiver)
+            ).dispatch(cls.ucInvariant)),
             x,
             modFields
               .map(m => succ[Declaration[Post]](m))
