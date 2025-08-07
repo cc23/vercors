@@ -6,7 +6,7 @@ class UnverifiedClass{
 }
 
 class DemoClass {
-    protected int f;
+    public int f;
 
     //@ ensures hidden(this);
     //@ ensures Perm(this.f, write);
