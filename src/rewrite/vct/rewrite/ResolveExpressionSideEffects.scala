@@ -364,8 +364,6 @@ case class ResolveExpressionSideEffects[Pre <: Generation]()
                 dispatch(body),
               )
             case (variables, sideEffects, cond) =>
-              val break = new LabelDecl[Post]()(BreakOrigin)
-
               Block(Seq(
                 Loop(
                   dispatch(init),
@@ -376,13 +374,12 @@ case class ResolveExpressionSideEffects[Pre <: Generation]()
                     Scope(
                       variables,
                       Block(
-                        sideEffects :+ Branch(Seq(Not(cond) -> Goto(break.ref)))
+                        sideEffects :+ Branch(Seq(Not(cond) -> Break(None)))
                       ),
                     ),
                     dispatch(body),
                   )),
                 ),
-                Label(break, Block(Nil)),
               ))
           }
         case attempt: TryCatchFinally[Pre] => rewriteDefault(attempt)

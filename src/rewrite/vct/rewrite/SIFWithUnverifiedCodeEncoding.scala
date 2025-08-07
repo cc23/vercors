@@ -207,6 +207,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
 
   private def getAccountedPredicate(exp: Seq[Expr[Post]])(implicit o: Origin): AccountedPredicate[Post] =
     exp match {
+      case Nil => emptyAccountedPredicate(o)
       case Seq(last) => UnitAccountedPredicate(last)
       case head +: tail =>
         SplitAccountedPredicate(
@@ -614,12 +615,12 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           }
           val argSub = new ArgSubstitute(m.args, m.outArgs, m.typeArgs)
           val newArgs = variables.dispatch(argSub.newArgs)
-          val retVar: Option[Variable[Post]] = argSub.newOutArgs.find(!_.t.isInstanceOf[TVoid[Pre]])
+          val retVar: Seq[Variable[Post]] = argSub.newOutArgs
             .map(variables.dispatch)
           classDeclarations.declare(
             new InstanceMethod(dispatch(argSub.dispatch(m.returnType)),
               newArgs,
-              retVar.toSeq,
+              retVar,
               variables.dispatch(argSub.newTypeArgs),
               m.body.map(stat => Block(
                   inhaleAllLowAndLeakable(newArgs)
@@ -632,9 +633,9 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
                     )
               )),
               ApplicableContract(emptyAccountedPredicate,
-                retVar.map(ret => getAccountedPredicate(
+                retVar.headOption.map(ret => getAccountedPredicate(
                   Option.when(noPrimitiveType(ret.t))(leakable(Local(ret.ref))).toSeq
-                    :+ Low(Local(ret.ref)))
+                    ++ Option.when(!ret.t.isInstanceOf[TVoid[Post]])(Low(Local(ret.ref[Variable[Post]]))).toSeq)
                   )
                   .getOrElse(emptyAccountedPredicate),
                 //TODO check other contract parameters
