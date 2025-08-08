@@ -60,7 +60,7 @@ class StoreSecretToLeaked {
     //@ requires !isLeaked ==> this.unverifiedClass != null;
     //@ requires !isLeaked ==> low(this.unverifiedClass);
     public void verifiedLeakedReturn(int secret){
-        DemoClass demoClass = verifiedWrapperMethod() /*@ given {isLeaked=isLeaked} @*/;
+        DemoClass demoClass = verifiedWrapperMethod() /*@ given {isLeaked=perm(leakable(this)) > 0} @*/;
         demoClass.f = secret;
     }
 }
