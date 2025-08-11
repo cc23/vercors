@@ -49,6 +49,7 @@ public class String {
     /*@
     decreases;
     requires other != null;
+    requires lowEvent;
     ensures \result != null ** \result instanceof String;
     ensures \result.data() == data() + other.data();
     String +(String other) {
@@ -57,6 +58,7 @@ public class String {
 
     decreases;
     requires other != null;
+    requires lowEvent;
     ensures \result != null ** \result instanceof String;
     ensures \result.data() == other.data() + data();
     String right+(String other) {

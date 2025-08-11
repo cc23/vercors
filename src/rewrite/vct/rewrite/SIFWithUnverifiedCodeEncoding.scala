@@ -6,13 +6,20 @@ import vct.col.ast.{InstanceField, _}
 import vct.col.origin.Name.Preferred
 import vct.col.origin._
 import vct.col.ref.Ref
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
+import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.util.AstBuildHelpers.tt
 import vct.col.util.{PredicateExpSubstitute, Substitute}
 import vct.result.VerificationError.SystemError
 import vct.rewrite.HiddenLeakableToPredicates.{hiddenPredName, leakablePredName}
+import vct.rewrite.SIFWithUnverifiedCodeEncoding.{
+  indirectlyFromUcGhostParamName,
+  indirectlyFromUcSeqName,
+}
 
 case object SIFWithUnverifiedCodeEncoding extends RewriterBuilder {
+  val indirectlyFromUcGhostParamName: String = "indirectlyFromUc"
+  val indirectlyFromUcSeqName: Seq[String] = Seq("indirectly", "from", "uc")
+
   override def key: String = "unverifiedCodeSIF"
   override def desc: String =
     "Resolve the leak operation for partially verified code."
@@ -77,8 +84,28 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
     def dispatch(t : Type[Pre]) : Type[Pre] = sub.dispatch(t)
   }
 
-  private def noPrimitiveType[G](t: Type[G]): Boolean =
-    !t.isInstanceOf[PrimitiveType[G]]
+  private def isIndirectlyFromUcGhostParam(arg : Variable[_]) : Boolean =
+    arg.o.getPreferredName.get.camel == indirectlyFromUcGhostParamName
+
+  private def noPrimitiveType(t: Type[Pre]): Boolean = t match {
+    case clz: TByReferenceClass[_] => !isPrimitiveClass(clz)
+    case _ => !t.isInstanceOf[PrimitiveType[Pre]]
+  }
+
+  private def isPrimitiveClass(clz: TByReferenceClass[Pre]) = {
+    clz.cls.decl.o.getPreferredName.get.camel.contains("string")
+  }
+
+  private def setIndirectlyFromUC(args: Seq[Variable[Pre]], values: Seq[Expr[Pre]]) : Seq[Expr[Post]] = {
+    val ghostParamIndex = args.indexWhere(isIndirectlyFromUcGhostParam)
+    val ghostParamValue: Expr[Post] = if (isCurrentMethod2ndVerification.top) tt
+    else Local(currentIndirectlyFromUcParam.top.ref[Variable[Post]])(origin(indirectlyFromUcSeqName))
+    if(ghostParamIndex < 0){
+      values.map(dispatch) :+ ghostParamValue
+    } else {
+      values.map(dispatch).updated(ghostParamIndex, ghostParamValue)
+    }
+  }
 
   private def inhaleNullFieldsLeakableHidden(clsPre: ByReferenceClass[Pre], fieldAccess: InstanceField[Pre] => Expr[Post])(implicit o : Origin)
   : Seq[Statement[Post]] = {
@@ -165,10 +192,14 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
   private def curPermLeakable(obj: Expr[Post])(implicit o:Origin): Expr[Post] =
     CurPerm(PredicateLocation(PredicateApply(leakablePredRef, Seq(obj))))
 
-  private def inhaleAllLowAndLeakable(variables: Seq[Variable[Post]])(implicit o : Origin) : Seq[Statement[Post]] =
-    variables.filter(arg => noPrimitiveType(arg.t))
-      .map(arg => Inhale(leakable(Local(arg.ref[Variable[Post]])))) ++
-      variables.map(arg => Assume(Low(Local(arg.ref[Variable[Post]]))))
+  private def inhaleAllLowAndLeakable(variablesPre: Seq[Variable[Pre]], variablesPost: Seq[Variable[Post]])(implicit o : Origin) : Seq[Statement[Post]] = {
+    val variables: Seq[(Variable[Pre], Variable[Post])] = variablesPre zip variablesPost
+    variables.filter(arg => noPrimitiveType(arg._1.t))
+      .map {
+        case (_, vPost) => Inhale(leakable(Local(vPost.ref[Variable[Post]])))
+      } ++
+      variablesPost.map(arg => Assume(Low(Local(arg.ref[Variable[Post]]))))
+  }
 
   private def declareNewVar[G](arg: Variable[G]): Variable[G] = {
     new Variable(arg.t)(origin(
@@ -221,6 +252,11 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       Seq(PreferredName(Seq(preferredName)), LabelContext("unverifiedCodeSIF"))
     )
 
+  private def origin(preferredName: Seq[String]): Origin =
+    Origin(
+      Seq(PreferredName(preferredName), LabelContext("unverifiedCodeSIF"))
+    )
+
   private def origin(preferredName: Name): Origin =
     Origin(Seq(IndirectName(preferredName), LabelContext("unverifiedCodeSIF")))
 
@@ -228,6 +264,8 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
   var leakablePredRef: Ref[Post, Predicate[Post]] = null
 
   val currentClass: ScopedStack[ByReferenceClass[Pre]] = ScopedStack()
+  val isCurrentMethod2ndVerification: ScopedStack[Boolean] = ScopedStack()
+  val currentIndirectlyFromUcParam: ScopedStack[Variable[Post]] = ScopedStack()
 
   override def dispatch(expr: Expr[Pre]): Expr[Post] = {
     implicit val o: Origin = expr.o
@@ -253,18 +291,23 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         val args: Seq[Expr[Post]] = invCons.args.map(dispatch)
           //skip first argument = tid
           .tail
+        val newInv = invCons.rewrite(
+          args = if (isClsFromLib(cls)) invCons.args.map(dispatch)
+                  else setIndirectlyFromUC(invCons.ref.decl.args, invCons.args)
+        )
         if(cls.isUnverified){
           Block(
             args.map { arg =>
               Assert(Low(arg))(err => invCons.blame.blame(InvocationSIFUCFailure(invCons, err.failure)))(arg.o)
             }
               ++
-              args.filter(arg => noPrimitiveType(arg.t))
+              (invCons.args zip args).filter(arg => noPrimitiveType(arg._1.t))
+                .map(arg => arg._2)
               .map{arg => Assert(leakable(arg))(err => invCons.blame.blame(InvocationSIFUCFailure(invCons, err.failure)))(arg.o)}
               ++
             Seq[Statement[Post]](
               Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
-              invCons.rewriteDefault(),
+              newInv,
               Assume(Not(Eq(res, ThisObject[Post](succ(insideClass)))))(invCons.o), // see unverifiedcode/NewObjNotEqToThis.java
               Assume(Low(res))(invCons.o),
               Inhale(leakable(res)),
@@ -272,13 +315,17 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         } else {
           Block(Seq(
             Assert(LowEvent())(_ => invCons.blame.blame(InvocationMustBeLowEvent(invCons))),
-            invCons.rewriteDefault(),
+            newInv,
             Assume(Not(Eq(res, ThisObject[Post](succ(insideClass)))))(invCons.o), // see unverifiedcode/NewObjNotEqToThis.java
           ))
         }
       case mInv : InvokeMethod[_] =>
         //TODO track RuntimeClass
         val cls: ByReferenceClass[Pre] = getClsFromType(mInv.obj.t)
+        val newInv = mInv.rewrite(
+          args = if (isClsFromLib(cls)) mInv.args.map(dispatch)
+                  else setIndirectlyFromUC(mInv.ref.decl.args, mInv.args)
+        )
         if (cls.isUnverified) {
           if (mInv.outArgs.size > 1) {
             throw SIFUCUnsupported(mInv, "Too many outArgs for MethodInvocation.")
@@ -293,19 +340,20 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               Assert(Low(arg))(err => mInv.blame.blame(InvocationSIFUCFailure(mInv, err.failure)))(arg.o)
             }
               ++
-              args.filter(arg => noPrimitiveType(arg.t))
+              (mInv.args zip args).filter(arg => noPrimitiveType(arg._1.t))
+                .map(arg => arg._2)
                 .map { arg => Assert(leakable(arg))(err => mInv.blame.blame(InvocationSIFUCFailure(mInv, err.failure)))(arg.o) }
               ++
               Seq[Statement[Post]](
                 Assert(LowEvent())(_ => mInv.blame.blame(InvocationMustBeLowEvent(mInv))),
                 Assert(Low(dispatch(mInv.obj)))(err => mInv.blame.blame(InvocationSIFUCFailure(mInv, err.failure)))(mInv.obj.o),
-                mInv.rewriteDefault(),
+                newInv,
                 Assume(Low(res))
               )
-              ++ (if (noPrimitiveType(res.t)) Seq(Inhale(leakable(res))) else Seq())
+              ++ (if (noPrimitiveType(mInv.outArgs.head.t)) Seq(Inhale(leakable(res))) else Seq())
           )
-        } else{
-          mInv.rewriteDefault()
+        } else {
+          newInv
         }
       // Field reads
       case assign @ Assign(resVar @ Local(_), Deref(receiver, fieldRef)) =>
@@ -382,7 +430,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
             ifLeakableElse(x,
               ifBody = Scope(Seq(tempVar), Block(
-                (if(noPrimitiveType(temp.t)) Seq(Inhale(leakable(temp))) else Seq())
+                (if(noPrimitiveType(fieldRef.decl.t)) Seq(Inhale(leakable(temp))) else Seq())
                 ++
                 Seq[Statement[Post]](
                 Assume(Implies(Low(x), Low(temp))),
@@ -474,7 +522,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
             )(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$x must be either hidden or leakable."))),
             ifLeakableElse(x,
               ifBody =Block(
-                (if(noPrimitiveType(y.t)) Seq(Assert(leakable(y))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$y must be leakable."))))
+                (if(noPrimitiveType(newVal.t)) Seq(Assert(leakable(y))(_ => assign.blame.blame(AssignFailedSIFUC(assign, s"$y must be leakable."))))
                 else Seq())
                   ++
                 Seq[Statement[Post]](
@@ -535,17 +583,30 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
 
       case cons: Constructor[Pre] =>
         val clsPre: ByReferenceClass[Pre] = cons.cls.decl.asInstanceOf[ByReferenceClass[Pre]]
+        if(isClsFromLib(clsPre)){
+          allScopes.anySucceed(decl, decl.rewriteDefault())
+          return
+        }
+        val argsWithGhostParam: Seq[Variable[Pre]] = cons.args ++
+          (if (cons.args.exists(isIndirectlyFromUcGhostParam)) Seq()
+          else Seq(new Variable(TBool())(origin(indirectlyFromUcSeqName))))
         val cls: Ref[Post, Class[Post]] = succ(clsPre)
         val contractH = dispatch(cons.contract)
         val derefField: InstanceField[Pre] => Expr[Post] =
           f => Deref[Post](ThisObject(cls), succ(f))(_ => cons.blame.blame(SecondVerificationConstructorLeakFail(cons, s"missing perm for field $f")))
 
+        val newArgsH : Seq[Variable[Post]] = argsWithGhostParam.map(variables.dispatch)
         cons.rewrite(
+          args = newArgsH,
             body = cons.body.map(stat => Block[Post](
               Seq(
                 Inhale(hiddenWrite(ThisObject(cls))),
                 Assume(Low(ThisObject(cls))),
-                dispatch(stat),
+                isCurrentMethod2ndVerification.having(false){
+                  currentIndirectlyFromUcParam.having(newArgsH.filter(isIndirectlyFromUcGhostParam).head) {
+                    dispatch(stat)
+                  }
+                },
               )
                 ++
                 inhaleNullFieldsLeakableHidden(clsPre, derefField)
@@ -571,13 +632,15 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               variables.dispatch(argSub.newOutArgs),
               variables.dispatch(argSub.newTypeArgs),
               cons.body.map(stat => {
-                Block(inhaleAllLowAndLeakable(newArgs)
+                Block(inhaleAllLowAndLeakable(argSub.newArgs, newArgs)
                     ++
                     Seq[Statement[Post]](
                       Inhale(hiddenWrite(ThisObject(cls))),
                       Assume(Low(ThisObject(cls))),
                       Assume(LowEvent()),
-                      dispatch(argSub.dispatch(stat)),
+                      isCurrentMethod2ndVerification.having(true){
+                        dispatch(argSub.dispatch(stat))
+                      },
                     )
                   ++
                   inhaleNullFieldsLeakableHidden(clsPre, derefField)
@@ -604,7 +667,20 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
         }
       case m: InstanceMethod[_] =>
         val cls: Ref[Post, Class[Post]] = succ(currentClass.top)
-        classDeclarations.succeed(m, m.rewriteDefault())
+        val argsWithGhostParam: Seq[Variable[Pre]] = m.args ++
+          (if (m.args.exists(isIndirectlyFromUcGhostParam)) Seq()
+          else Seq(new Variable(TBool())(origin(indirectlyFromUcSeqName))))
+        val newArgsH : Seq[Variable[Post]] = argsWithGhostParam.map(variables.dispatch)
+        classDeclarations.succeed(m,
+          isCurrentMethod2ndVerification.having(false) {
+            currentIndirectlyFromUcParam.having(newArgsH.filter(isIndirectlyFromUcGhostParam).head) {
+              m.rewrite(args = newArgsH)
+            }
+          }
+        )
+        if(isClsFromLib(currentClass.top)){
+          return
+        }
         if(!m.isPrivate){
           if(m.outArgs.size > 1){
             throw SIFUCUnsupported(m, "Method has too many outArgs")
@@ -623,18 +699,20 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
               retVar,
               variables.dispatch(argSub.newTypeArgs),
               m.body.map(stat => Block(
-                  inhaleAllLowAndLeakable(newArgs)
+                  inhaleAllLowAndLeakable(argSub.newArgs, newArgs)
                     ++
                     Seq[Statement[Post]](
                       Assume(LowEvent()),
                       Inhale(leakable(ThisObject(cls))),
                       Assume(Low(ThisObject(cls))),
-                      dispatch(argSub.dispatch(stat)),
+                      isCurrentMethod2ndVerification.having(true) {
+                        dispatch(argSub.dispatch(stat))
+                      },
                     )
               )),
               ApplicableContract(emptyAccountedPredicate,
                 retVar.headOption.map(ret => getAccountedPredicate(
-                  Option.when(noPrimitiveType(ret.t))(leakable(Local(ret.ref))).toSeq
+                  Option.when(noPrimitiveType(argSub.newOutArgs.head.t))(leakable(Local(ret.ref))).toSeq
                     ++ Option.when(!ret.t.isInstanceOf[TVoid[Post]])(Low(Local(ret.ref[Variable[Post]]))).toSeq)
                   )
                   .getOrElse(emptyAccountedPredicate),
@@ -662,4 +740,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
       case other => allScopes.anySucceed(decl, decl.rewriteDefault())
     }
   }
+
+  private def isClsFromLib(clsPre: ByReferenceClass[Pre]): Boolean =
+    clsPre.o.get[ReadableOrigin].readable.underlyingPath.exists(path => path.startsWith("/home/nicolas/dev/MasterThesis/code/vercors/res"))
 }
