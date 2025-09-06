@@ -537,8 +537,27 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
 
         }
 
-      case b @ Branch(branches) =>
-        b.rewriteDefault()
+      case b@Branch(branches: Seq[(Expr[Pre], Statement[Pre])]) =>
+        Block[Post](
+          branches.map { case (cond: Expr[Pre], _) => Assert(Low(dispatch(cond)))(PanicBlame("If condition might not be low")) }
+            :+ b.rewriteDefault()
+        )
+      case l: Loop[_] =>
+        val cond = dispatch(l.cond)
+        val assertLowCond: Assert[Post] = Assert(Low(cond))(PanicBlame("Loop condition might not be low"))
+        Block[Post](Seq(
+          l.rewrite(
+            init = Block[Post](Seq(
+              l.init.rewriteDefault(),
+              assertLowCond
+            )),
+            update = Block[Post](Seq(
+              l.update.rewriteDefault(),
+              assertLowCond
+            ))
+          )
+        ))
+
       case other => other.rewriteDefault()
     }
   }
