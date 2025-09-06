@@ -135,6 +135,7 @@ case class SIFWithUnverifiedCodeEncoding[Pre <: Generation]() extends Rewriter[P
           Exhale(hiddenWrite(obj))(blameWithMsg(s"Might not have write perm to hidden($obj) during leak")),
           Inhale(leakable(obj)),
           Exhale(inv)(blameWithMsg(s"failed during exhaling inv: $inv")),
+          Assert(LowEvent())(blameWithMsg("leak might not be lowEvent")),
           Assert(Low(obj))(blameWithMsg(s"$obj might not be low")),
         )
           ++
