@@ -403,6 +403,22 @@ case class SecondVerificationPostFailed(node: ContractApplicable[_], failure: Co
     s"Result of public member '${node.o.inlineContextText}' might not be $lowOrLeakable, when called from UC."
 }
 
+case class SIFUCHighBranchingFailure(node: ContractApplicable[_], reason: String)
+  extends ContractedFailure {
+
+  override def position: String = node.o.shortPositionText
+
+  override def code: String = "highBranchFail"
+
+  override def desc: String =
+    Message.messagesInContext(
+      (node.o, s"This public member might contain high branching: $reason"),
+    )
+
+  override def inlineDesc: String =
+    s"Result of public member '${node.o.inlineContextText}' might contain high branching: $reason"
+}
+
 case class SecondVerificationConstructorLeakFail(node: Constructor[_], reason: String)
   extends CallableFailure  {
   override def position: String = node.o.shortPositionText

@@ -7,6 +7,7 @@ import hre.util.ScopedStack
 import vct.col.origin._
 import vct.col.ref.Ref
 import vct.col.rewrite.Generation
+import vct.rewrite.HiddenLeakableToPredicates.{arrHiddenPredName, arrLeakablePredName}
 
 import scala.collection.mutable
 
@@ -66,6 +67,23 @@ case class ImportArray[Pre <: Generation](importer: ImportADTImporter)
       case CoerceNullArray(_) => OptNoneTyped(TAxiomatic(arrayAdt.ref, Nil))
       case other => super.applyCoercion(e, other)
     }
+
+  override def preCoerce(decl: Declaration[Pre]): Declaration[Pre] = decl match {
+    case pred: Predicate[_] =>
+      implicit val o: Origin = pred.o
+      if (o.getPreferredName == arrLeakablePredName.name(o)
+        || o.getPreferredName == arrHiddenPredName.name(o)) {
+        new Predicate(
+          Seq(new Variable(TArray(TRef()))),
+          None,
+          pred.threadLocal,
+          pred.inline,
+        )
+      } else {
+        decl
+      }
+    case _ => decl
+  }
 
   override def postCoerce(t: Type[Pre]): Type[Post] =
     t match {
